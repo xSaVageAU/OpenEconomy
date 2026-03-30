@@ -107,6 +107,11 @@ public class EconomyCommands {
         if (sender.getUUID().equals(targetUUID)) return fail(ctx, "You cannot pay yourself.");
 
         var eco = EconomyManager.getInstance();
+        BigDecimal targetBal = eco.getBalance(targetUUID);
+        if (targetBal.add(amount).compareTo(EconomyManager.MAX_BALANCE) > 0) {
+            return fail(ctx, "Target's balance would exceed the maximum limit.");
+        }
+
         if (!eco.removeBalance(sender.getUUID(), amount)) return fail(ctx, "Insufficient funds.");
 
         eco.addBalance(targetUUID, amount);
@@ -138,7 +143,13 @@ public class EconomyCommands {
         var uuid = lookupUUID(ctx, name);
         if (uuid == null) return fail(ctx, "Player not found.");
 
-        EconomyManager.getInstance().addBalance(uuid, amount);
+        var eco = EconomyManager.getInstance();
+        BigDecimal current = eco.getBalance(uuid);
+        if (current.add(amount).compareTo(EconomyManager.MAX_BALANCE) > 0) {
+            return fail(ctx, "Target's balance would exceed the maximum limit.");
+        }
+
+        eco.addBalance(uuid, amount);
         var f = EconomyManager.getInstance().format(amount);
         ctx.getSource().sendSuccess(() -> Component.literal("§aGave " + f + " to " + name), true);
         notify(ctx, uuid, "§eReceived " + f + " (Admin)");
@@ -166,6 +177,10 @@ public class EconomyCommands {
 
         var uuid = lookupUUID(ctx, name);
         if (uuid == null) return fail(ctx, "Player not found.");
+
+        if (amount.compareTo(EconomyManager.MAX_BALANCE) > 0) {
+            return fail(ctx, "Amount exceeds the maximum balance limit.");
+        }
 
         EconomyManager.getInstance().setBalance(uuid, amount);
         var f = EconomyManager.getInstance().format(amount);

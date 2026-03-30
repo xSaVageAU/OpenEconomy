@@ -7,7 +7,9 @@ import savage.openeconomy.storage.EconomyStorage;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -16,12 +18,19 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class EconomyManager {
 
+    public static final BigDecimal MAX_BALANCE = new BigDecimal("1000000000000000"); // 1 Quadrillion
     private static final EconomyManager INSTANCE = new EconomyManager();
     private static final ThreadLocal<DecimalFormat> FORMATTER = ThreadLocal.withInitial(() -> new DecimalFormat("#,##0.00"));
 
     private final Map<UUID, AccountData> cache = new ConcurrentHashMap<>();
     private final Map<String, UUID> reverseCache = new ConcurrentHashMap<>();
     private final EconomyStorage storage = new EconomyStorage();
+
+    private final ExecutorService diskExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "OpenEconomy-Storage-Thread");
+        t.setDaemon(true);
+        return t;
+    });
 
     private EconomyManager() {
         var all = storage.loadAllAccounts();
@@ -40,9 +49,10 @@ public class EconomyManager {
     }
 
     public void setBalance(UUID uuid, BigDecimal bal) {
+        final BigDecimal clamped = bal.min(MAX_BALANCE).max(BigDecimal.ZERO);
         cache.compute(uuid, (key, existing) -> {
             String name = existing != null ? existing.name() : "Unknown";
-            AccountData updated = new AccountData(name, bal);
+            AccountData updated = new AccountData(name, clamped);
             saveAsync(uuid, updated);
             return updated;
         });
@@ -52,7 +62,8 @@ public class EconomyManager {
         if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
         cache.compute(uuid, (key, existing) -> {
             AccountData current = (existing != null) ? existing : loadFromStorageOrNew(uuid, null);
-            AccountData updated = new AccountData(current.name(), current.balance().add(amount));
+            BigDecimal newBal = current.balance().add(amount).min(MAX_BALANCE);
+            AccountData updated = new AccountData(current.name(), newBal);
             saveAsync(uuid, updated);
             return updated;
         });
@@ -103,7 +114,7 @@ public class EconomyManager {
     }
 
     private void saveAsync(UUID uuid, AccountData data) {
-        CompletableFuture.runAsync(() -> storage.saveAccount(uuid, data));
+        diskExecutor.execute(() -> storage.saveAccount(uuid, data));
     }
 
     public void resetBalance(UUID uuid) {
@@ -132,6 +143,16 @@ public class EconomyManager {
     }
 
     public void shutdown() {
+        OpenEconomy.LOGGER.info("Stopping storage executor...");
+        diskExecutor.shutdown();
+        try {
+            if (!diskExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                diskExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            diskExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
         storage.shutdown();
     }
 }
