@@ -9,7 +9,7 @@
 	],
 	"contact": {
 		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/Savage/OpenEconomy"
+		"sources": "https://github.com/xSaVageAU/OpenEconomy"
 	},
 	"license": "MIT",
 	"icon": "assets/open-economy/icon.png",
@@ -24,5 +24,8 @@
 		"minecraft": "~26.1",
 		"java": ">=25",
 		"fabric-api": "*"
+	},
+	"suggests": {
+		"common-economy-api": "*"
 	}
 }

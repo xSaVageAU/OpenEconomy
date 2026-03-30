@@ -1,0 +1,137 @@
+package savage.openeconomy.integration;
+
+import com.mojang.authlib.GameProfile;
+import eu.pb4.common.economy.api.EconomyAccount;
+import eu.pb4.common.economy.api.EconomyCurrency;
+import eu.pb4.common.economy.api.EconomyProvider;
+import eu.pb4.common.economy.api.EconomyTransaction;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
+import savage.openeconomy.EconomyManager;
+import savage.openeconomy.OpenEconomy;
+import savage.openeconomy.config.CurrencyConstants;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.UUID;
+
+/**
+ * Common Economy API account implementation.
+ * Bridges API calls to the EconomyManager.
+ */
+public class OpenEconomyAccount implements EconomyAccount {
+
+    private final GameProfile profile;
+    private final EconomyCurrency currency;
+    private final EconomyProvider provider;
+
+    public OpenEconomyAccount(GameProfile profile, EconomyCurrency currency, EconomyProvider provider) {
+        this.profile = profile;
+        this.currency = currency;
+        this.provider = provider;
+    }
+
+    @Override
+    public Component name() {
+        return Component.literal(profile.name());
+    }
+
+    @Override
+    public UUID owner() {
+        return profile.id();
+    }
+
+    @Override
+    public Identifier id() {
+        return Identifier.fromNamespaceAndPath(CurrencyConstants.PROVIDER_ID, profile.id().toString());
+    }
+
+    @Override
+    public EconomyCurrency currency() {
+        return currency;
+    }
+
+    @Override
+    public EconomyProvider provider() {
+        return provider;
+    }
+
+    /**
+     * Returns the balance in raw cents (BigInteger).
+     * The EconomyManager stores dollars, so we multiply by 100.
+     */
+    @Override
+    public BigInteger balance() {
+        BigDecimal dollars = EconomyManager.getInstance().getBalance(profile.id());
+        return dollars.multiply(new BigDecimal("100")).toBigInteger();
+    }
+
+    @Override
+    public void setBalance(BigInteger value) {
+        BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal("100"));
+        EconomyManager.getInstance().setBalance(profile.id(), dollars);
+    }
+
+    @Override
+    public EconomyTransaction increaseBalance(BigInteger value) {
+        BigInteger current = balance();
+        BigInteger next = current.add(value);
+        setBalance(next);
+
+        sendFeedback(value, true);
+
+        return new EconomyTransaction.Simple(true, Component.literal("Success"), next, current, value, this);
+    }
+
+    @Override
+    public EconomyTransaction decreaseBalance(BigInteger value) {
+        BigInteger current = balance();
+        if (current.compareTo(value) >= 0) {
+            BigInteger next = current.subtract(value);
+            setBalance(next);
+
+            sendFeedback(value, false);
+
+            return new EconomyTransaction.Simple(true, Component.literal("Success"), next, current, value.negate(), this);
+        } else {
+            return new EconomyTransaction.Simple(false, Component.literal("Insufficient funds"), current, current, value.negate(), this);
+        }
+    }
+
+    @Override
+    public EconomyTransaction canIncreaseBalance(BigInteger value) {
+        BigInteger current = balance();
+        return new EconomyTransaction.Simple(true, Component.literal("Success"), current.add(value), current, value, this);
+    }
+
+    @Override
+    public EconomyTransaction canDecreaseBalance(BigInteger value) {
+        BigInteger current = balance();
+        if (current.compareTo(value) >= 0) {
+            return new EconomyTransaction.Simple(true, Component.literal("Success"), current.subtract(value), current, value.negate(), this);
+        } else {
+            return new EconomyTransaction.Simple(false, Component.literal("Insufficient funds"), current, current, value.negate(), this);
+        }
+    }
+
+    /**
+     * Sends action bar feedback to the player when their balance changes via the API.
+     */
+    private void sendFeedback(BigInteger rawValue, boolean isIncrease) {
+        var server = OpenEconomy.getServer();
+        if (server == null) return;
+
+        ServerPlayer player = server.getPlayerList().getPlayer(profile.id());
+        if (player == null) return;
+
+        String formatted = currency instanceof OpenEconomyCurrency oec
+                ? oec.formatValue(rawValue, true)
+                : rawValue.toString();
+
+        String prefix = isIncrease ? "§a+" : "§c-";
+        String message = "§e[Economy] " + prefix + formatted;
+
+        server.execute(() -> player.sendSystemMessage(Component.literal(message), true));
+    }
+}
