@@ -7,8 +7,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import savage.openeconomy.EconomyManager;
-import savage.openeconomy.config.ConfigManager;
-import savage.openeconomy.config.CurrencyConstants;
+import savage.openeconomy.config.EconomyConfig;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -27,18 +26,14 @@ public class OpenEconomyCurrency implements EconomyCurrency {
 
     @Override
     public Component name() {
-        return Component.literal(ConfigManager.getConfig().getCurrencyName());
+        return Component.literal(EconomyConfig.instance().currencyName);
     }
 
     @Override
     public Identifier id() {
-        return Identifier.fromNamespaceAndPath(CurrencyConstants.PROVIDER_ID, CurrencyConstants.CURRENCY_ID);
+        return Identifier.fromNamespaceAndPath(EconomyConfig.PROVIDER_ID, EconomyConfig.CURRENCY_ID);
     }
 
-    /**
-     * Formats a raw BigInteger value (in cents) as a human-readable currency string.
-     * Divides by 100 to convert from cents to dollars before formatting.
-     */
     @Override
     public String formatValue(BigInteger value, boolean full) {
         BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal("100"));
@@ -50,15 +45,10 @@ public class OpenEconomyCurrency implements EconomyCurrency {
         return Component.literal(formatValue(value, full));
     }
 
-    /**
-     * Parses a human-readable value string into raw BigInteger cents.
-     * Multiplies by 100 to convert from dollars to cents.
-     */
     @Override
     public BigInteger parseValue(String value) {
         try {
             if (value == null || value.isEmpty()) return BigInteger.ZERO;
-            // Strip currency symbols and formatting characters
             String sanitized = value.replaceAll("[^0-9.\\-]", "");
             if (sanitized.isEmpty() || sanitized.equals("-") || sanitized.equals(".")) return BigInteger.ZERO;
             return new BigDecimal(sanitized).multiply(new BigDecimal("100")).toBigInteger();

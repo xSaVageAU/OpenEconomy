@@ -10,7 +10,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import savage.openeconomy.EconomyManager;
 import savage.openeconomy.OpenEconomy;
-import savage.openeconomy.config.CurrencyConstants;
+import savage.openeconomy.config.EconomyConfig;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -44,7 +44,7 @@ public class OpenEconomyAccount implements EconomyAccount {
 
     @Override
     public Identifier id() {
-        return Identifier.fromNamespaceAndPath(CurrencyConstants.PROVIDER_ID, profile.id().toString());
+        return Identifier.fromNamespaceAndPath(EconomyConfig.PROVIDER_ID, profile.id().toString());
     }
 
     @Override
@@ -57,10 +57,6 @@ public class OpenEconomyAccount implements EconomyAccount {
         return provider;
     }
 
-    /**
-     * Returns the balance in raw cents (BigInteger).
-     * The EconomyManager stores dollars, so we multiply by 100.
-     */
     @Override
     public BigInteger balance() {
         BigDecimal dollars = EconomyManager.getInstance().getBalance(profile.id());
@@ -78,9 +74,7 @@ public class OpenEconomyAccount implements EconomyAccount {
         BigInteger current = balance();
         BigInteger next = current.add(value);
         setBalance(next);
-
         sendFeedback(value, true);
-
         return new EconomyTransaction.Simple(true, Component.literal("Success"), next, current, value, this);
     }
 
@@ -90,13 +84,10 @@ public class OpenEconomyAccount implements EconomyAccount {
         if (current.compareTo(value) >= 0) {
             BigInteger next = current.subtract(value);
             setBalance(next);
-
             sendFeedback(value, false);
-
             return new EconomyTransaction.Simple(true, Component.literal("Success"), next, current, value.negate(), this);
-        } else {
-            return new EconomyTransaction.Simple(false, Component.literal("Insufficient funds"), current, current, value.negate(), this);
         }
+        return new EconomyTransaction.Simple(false, Component.literal("Insufficient funds"), current, current, value.negate(), this);
     }
 
     @Override
@@ -110,14 +101,10 @@ public class OpenEconomyAccount implements EconomyAccount {
         BigInteger current = balance();
         if (current.compareTo(value) >= 0) {
             return new EconomyTransaction.Simple(true, Component.literal("Success"), current.subtract(value), current, value.negate(), this);
-        } else {
-            return new EconomyTransaction.Simple(false, Component.literal("Insufficient funds"), current, current, value.negate(), this);
         }
+        return new EconomyTransaction.Simple(false, Component.literal("Insufficient funds"), current, current, value.negate(), this);
     }
 
-    /**
-     * Sends action bar feedback to the player when their balance changes via the API.
-     */
     private void sendFeedback(BigInteger rawValue, boolean isIncrease) {
         var server = OpenEconomy.getServer();
         if (server == null) return;

@@ -8,10 +8,9 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import savage.openeconomy.command.AdminCommands;
 import savage.openeconomy.command.EconomyCommands;
 import savage.openeconomy.config.ConfigManager;
-import savage.openeconomy.config.CurrencyConstants;
+import savage.openeconomy.config.EconomyConfig;
 import savage.openeconomy.integration.OpenEconomyProvider;
 
 public class OpenEconomy implements ModInitializer {
@@ -28,32 +27,17 @@ public class OpenEconomy implements ModInitializer {
     public void onInitialize() {
         LOGGER.info("OpenEconomy is initializing...");
 
-        // Load Configuration
         ConfigManager.load();
 
-        // Register Commands
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-            EconomyCommands.register(dispatcher);
-            AdminCommands.register(dispatcher);
-        });
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> 
+            EconomyCommands.register(dispatcher));
 
-        // Register Player Join Hook — ensure account exists with up-to-date name
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, srv) -> {
-            EconomyManager.getInstance().getOrCreateAccount(
-                    handler.getPlayer().getUUID(),
-                    handler.getPlayer().getGameProfile().name()
-            );
-        });
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, srv) -> 
+            EconomyManager.getInstance().getOrCreateAccount(handler.getPlayer().getUUID(), handler.getPlayer().getGameProfile().name()));
 
-        // Register Common Economy API Provider
-        CommonEconomy.register(CurrencyConstants.PROVIDER_ID, OpenEconomyProvider.INSTANCE);
+        CommonEconomy.register(EconomyConfig.PROVIDER_ID, OpenEconomyProvider.INSTANCE);
 
-        // Store server reference on start
-        ServerLifecycleEvents.SERVER_STARTING.register(srv -> {
-            server = srv;
-        });
-
-        // Graceful shutdown
+        ServerLifecycleEvents.SERVER_STARTING.register(srv -> server = srv);
         ServerLifecycleEvents.SERVER_STOPPING.register(srv -> {
             LOGGER.info("OpenEconomy is shutting down...");
             EconomyManager.getInstance().shutdown();
