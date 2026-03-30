@@ -7,6 +7,7 @@ import savage.openeconomy.storage.EconomyStorage;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -39,56 +40,70 @@ public class EconomyManager {
     }
 
     public void setBalance(UUID uuid, BigDecimal bal) {
-        var existing = cache.get(uuid);
-        var name = existing != null ? existing.name() : "Unknown";
-        var updated = new AccountData(name, bal);
-        
-        cache.put(uuid, updated);
-        storage.saveAccount(uuid, updated);
+        cache.compute(uuid, (key, existing) -> {
+            String name = existing != null ? existing.name() : "Unknown";
+            AccountData updated = new AccountData(name, bal);
+            saveAsync(uuid, updated);
+            return updated;
+        });
     }
 
     public boolean addBalance(UUID uuid, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
-        var d = getOrCreateAccount(uuid, null);
-        var updated = new AccountData(d.name(), d.balance().add(amount));
-        cache.put(uuid, updated);
-        storage.saveAccount(uuid, updated);
+        cache.compute(uuid, (key, existing) -> {
+            AccountData current = (existing != null) ? existing : loadFromStorageOrNew(uuid, null);
+            AccountData updated = new AccountData(current.name(), current.balance().add(amount));
+            saveAsync(uuid, updated);
+            return updated;
+        });
         return true;
     }
 
     public boolean removeBalance(UUID uuid, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
-        var d = getOrCreateAccount(uuid, null);
-        if (d.balance().compareTo(amount) < 0) return false;
-        var updated = new AccountData(d.name(), d.balance().subtract(amount));
-        cache.put(uuid, updated);
-        storage.saveAccount(uuid, updated);
-        return true;
+        final boolean[] success = {false};
+        cache.compute(uuid, (key, existing) -> {
+            AccountData current = (existing != null) ? existing : loadFromStorageOrNew(uuid, null);
+            if (current.balance().compareTo(amount) < 0) return existing;
+
+            AccountData updated = new AccountData(current.name(), current.balance().subtract(amount));
+            saveAsync(uuid, updated);
+            success[0] = true;
+            return updated;
+        });
+        return success[0];
     }
 
     public AccountData getOrCreateAccount(UUID uuid, String name) {
-        var d = cache.get(uuid);
-        if (d != null) {
-            if (name != null && !name.equalsIgnoreCase(d.name())) {
-                reverseCache.remove(d.name().toLowerCase());
-                d = new AccountData(name, d.balance());
-                cache.put(uuid, d);
-                reverseCache.put(name.toLowerCase(), uuid);
-                storage.saveAccount(uuid, d);
+        return cache.compute(uuid, (key, existing) -> {
+            if (existing != null) {
+                if (name != null && !name.equalsIgnoreCase(existing.name())) {
+                    reverseCache.remove(existing.name().toLowerCase());
+                    AccountData updated = new AccountData(name, existing.balance());
+                    reverseCache.put(name.toLowerCase(), uuid);
+                    saveAsync(uuid, updated);
+                    return updated;
+                }
+                return existing;
             }
-            return d;
-        }
 
-        // Try load from storage if not in cache (safeguard)
-        d = storage.loadAccount(uuid);
+            AccountData loaded = loadFromStorageOrNew(uuid, name);
+            if (name != null) reverseCache.put(name.toLowerCase(), uuid);
+            saveAsync(uuid, loaded);
+            return loaded;
+        });
+    }
+
+    private AccountData loadFromStorageOrNew(UUID uuid, String name) {
+        AccountData d = storage.loadAccount(uuid);
         if (d == null) {
             d = new AccountData(name != null ? name : "Unknown", EconomyConfig.instance().defaultBalanceDecimal());
         }
-
-        cache.put(uuid, d);
-        if (name != null) reverseCache.put(name.toLowerCase(), uuid);
-        storage.saveAccount(uuid, d);
         return d;
+    }
+
+    private void saveAsync(UUID uuid, AccountData data) {
+        CompletableFuture.runAsync(() -> storage.saveAccount(uuid, data));
     }
 
     public void resetBalance(UUID uuid) {
