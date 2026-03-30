@@ -14,6 +14,7 @@ import savage.openeconomy.config.EconomyConfig;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.UUID;
 
 /**
@@ -65,7 +66,7 @@ public class OpenEconomyAccount implements EconomyAccount {
 
     @Override
     public void setBalance(BigInteger value) {
-        BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal("100"));
+        BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
         EconomyManager.getInstance().setBalance(profile.id(), dollars);
     }
 

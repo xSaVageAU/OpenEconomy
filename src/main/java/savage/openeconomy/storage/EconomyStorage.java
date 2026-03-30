@@ -46,7 +46,7 @@ public class EconomyStorage {
                 CREATE TABLE IF NOT EXISTS %s (
                     uuid TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
-                    balance REAL NOT NULL DEFAULT 0.0
+                    balance TEXT NOT NULL DEFAULT '0.0'
                 )
                 """.formatted(TABLE_NAME);
 
@@ -67,7 +67,8 @@ public class EconomyStorage {
 
             if (rs.next()) {
                 String name = rs.getString("name");
-                BigDecimal balance = BigDecimal.valueOf(rs.getDouble("balance"));
+                String balanceStr = rs.getString("balance");
+                BigDecimal balance = new BigDecimal(balanceStr != null ? balanceStr : "0");
                 return new AccountData(name, balance);
             }
             return null;
@@ -83,7 +84,7 @@ public class EconomyStorage {
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, uuid.toString());
             stmt.setString(2, data.name());
-            stmt.setDouble(3, data.balance().doubleValue());
+            stmt.setString(3, data.balance().toPlainString());
             stmt.executeUpdate();
         } catch (SQLException e) {
             OpenEconomy.LOGGER.error("Failed to save account for UUID: {}", uuid, e);
@@ -110,7 +111,8 @@ public class EconomyStorage {
             while (rs.next()) {
                 UUID uuid = UUID.fromString(rs.getString("uuid"));
                 String name = rs.getString("name");
-                BigDecimal balance = BigDecimal.valueOf(rs.getDouble("balance"));
+                String balanceStr = rs.getString("balance");
+                BigDecimal balance = new BigDecimal(balanceStr != null ? balanceStr : "0");
                 accounts.put(uuid, new AccountData(name, balance));
             }
         } catch (SQLException e) {

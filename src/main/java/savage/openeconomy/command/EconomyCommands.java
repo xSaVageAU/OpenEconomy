@@ -1,7 +1,6 @@
 package savage.openeconomy.command;
 
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -48,7 +47,7 @@ public class EconomyCommands {
                 .requires(src -> PermissionsHelper.check(src, "openeconomy.command.pay", true))
                 .then(Commands.argument("target", StringArgumentType.string())
                         .suggests(PLAYER_SUGGESTIONS)
-                        .then(Commands.argument("amount", DoubleArgumentType.doubleArg(0.01))
+                        .then(Commands.argument("amount", StringArgumentType.string())
                                 .executes(EconomyCommands::pay))));
 
         var baltopNode = dispatcher.register(Commands.literal("baltop")
@@ -62,13 +61,13 @@ public class EconomyCommands {
                 .requires(src -> PermissionsHelper.check(src, "openeconomy.admin", 2))
                 .then(Commands.literal("give")
                         .then(Commands.argument("target", StringArgumentType.string()).suggests(PLAYER_SUGGESTIONS)
-                                .then(Commands.argument("amount", DoubleArgumentType.doubleArg(0)).executes(EconomyCommands::adminGive))))
+                                .then(Commands.argument("amount", StringArgumentType.string()).executes(EconomyCommands::adminGive))))
                 .then(Commands.literal("take")
                         .then(Commands.argument("target", StringArgumentType.string()).suggests(PLAYER_SUGGESTIONS)
-                                .then(Commands.argument("amount", DoubleArgumentType.doubleArg(0)).executes(EconomyCommands::adminTake))))
+                                .then(Commands.argument("amount", StringArgumentType.string()).executes(EconomyCommands::adminTake))))
                 .then(Commands.literal("set")
                         .then(Commands.argument("target", StringArgumentType.string()).suggests(PLAYER_SUGGESTIONS)
-                                .then(Commands.argument("amount", DoubleArgumentType.doubleArg(0)).executes(EconomyCommands::adminSet))))
+                                .then(Commands.argument("amount", StringArgumentType.string()).executes(EconomyCommands::adminSet))))
                 .then(Commands.literal("reset")
                         .then(Commands.argument("target", StringArgumentType.string()).suggests(PLAYER_SUGGESTIONS).executes(EconomyCommands::adminReset)))
                 .then(Commands.literal("reload").executes(EconomyCommands::adminReload)));
@@ -98,9 +97,12 @@ public class EconomyCommands {
     private static int pay(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         var sender = ctx.getSource().getPlayerOrException();
         var targetName = StringArgumentType.getString(ctx, "target");
-        var amount = BigDecimal.valueOf(DoubleArgumentType.getDouble(ctx, "amount"));
+        var amountStr = StringArgumentType.getString(ctx, "amount");
+        var amount = parseBigDecimal(amountStr);
+        
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) return fail(ctx, "Invalid amount.");
+        
         var targetUUID = lookupUUID(ctx, targetName);
-
         if (targetUUID == null) return fail(ctx, "Player not found.");
         if (sender.getUUID().equals(targetUUID)) return fail(ctx, "You cannot pay yourself.");
 
@@ -130,7 +132,9 @@ public class EconomyCommands {
 
     private static int adminGive(CommandContext<CommandSourceStack> ctx) {
         var name = StringArgumentType.getString(ctx, "target");
-        var amount = BigDecimal.valueOf(DoubleArgumentType.getDouble(ctx, "amount"));
+        var amount = parseBigDecimal(StringArgumentType.getString(ctx, "amount"));
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) return fail(ctx, "Invalid amount.");
+
         var uuid = lookupUUID(ctx, name);
         if (uuid == null) return fail(ctx, "Player not found.");
 
@@ -143,7 +147,9 @@ public class EconomyCommands {
 
     private static int adminTake(CommandContext<CommandSourceStack> ctx) {
         var name = StringArgumentType.getString(ctx, "target");
-        var amount = BigDecimal.valueOf(DoubleArgumentType.getDouble(ctx, "amount"));
+        var amount = parseBigDecimal(StringArgumentType.getString(ctx, "amount"));
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) return fail(ctx, "Invalid amount.");
+
         var uuid = lookupUUID(ctx, name);
         if (uuid == null) return fail(ctx, "Player not found.");
 
@@ -155,7 +161,9 @@ public class EconomyCommands {
 
     private static int adminSet(CommandContext<CommandSourceStack> ctx) {
         var name = StringArgumentType.getString(ctx, "target");
-        var amount = BigDecimal.valueOf(DoubleArgumentType.getDouble(ctx, "amount"));
+        var amount = parseBigDecimal(StringArgumentType.getString(ctx, "amount"));
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) return fail(ctx, "Invalid amount.");
+
         var uuid = lookupUUID(ctx, name);
         if (uuid == null) return fail(ctx, "Player not found.");
 
@@ -189,6 +197,17 @@ public class EconomyCommands {
     public static UUID lookupUUID(CommandContext<CommandSourceStack> ctx, String name) {
         var p = ctx.getSource().getServer().getPlayerList().getPlayerByName(name);
         return p != null ? p.getUUID() : EconomyManager.getInstance().getUUIDFromName(name);
+    }
+
+    private static BigDecimal parseBigDecimal(String value) {
+        try {
+            if (value == null || value.isEmpty()) return null;
+            String sanitized = value.replaceAll("[^0-9.\\-]", "");
+            if (sanitized.isEmpty() || sanitized.equals("-") || sanitized.equals(".")) return null;
+            return new BigDecimal(sanitized);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static int fail(CommandContext<CommandSourceStack> ctx, String msg) {
