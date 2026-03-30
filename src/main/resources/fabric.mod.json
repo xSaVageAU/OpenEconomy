@@ -1,0 +1,28 @@
+{
+	"schemaVersion": 1,
+	"id": "open-economy",
+	"version": "${version}",
+	"name": "OpenEconomy",
+	"description": "A lightweight, modular, and extensible economy framework for Minecraft, fully integrated with the Common Economy API for maximum compatibility.",
+	"authors": [
+		"Savage"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/Savage/OpenEconomy"
+	},
+	"license": "MIT",
+	"icon": "assets/open-economy/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"savage.openeconomy.OpenEconomy"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.18.5",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
