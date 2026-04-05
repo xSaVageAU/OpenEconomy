@@ -12,6 +12,7 @@ base {
 
 repositories {
 	mavenCentral()
+	mavenLocal()
 	maven { url "https://maven.nucleoid.xyz/" }
 }
 
@@ -35,8 +36,9 @@ dependencies {
 	// Permissions API
 	include(implementation("me.lucko:fabric-permissions-api:0.7.0"))
 
-	// SQLite Storage
-	include(implementation("org.xerial:sqlite-jdbc:3.45.3.0"))
+	// NATS-Fabric Mod (Via mavenLocal)
+	include(implementation("savage.natsfabric:nats-fabric:1.0.0"))
+	implementation("io.nats:jnats:2.25.2")
 
 	// YAML Config
 	include(implementation("org.yaml:snakeyaml:2.2"))

@@ -20,7 +20,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 
 /**
- * All economy commands for OpenEconomy (Player & Admin).
+ * Economy commands for OpenEconomy (Player & Admin).
  */
 public class EconomyCommands {
 

@@ -37,7 +37,12 @@ public class OpenEconomy implements ModInitializer {
 
         CommonEconomy.register(EconomyConfig.PROVIDER_ID, OpenEconomyProvider.INSTANCE);
 
-        ServerLifecycleEvents.SERVER_STARTING.register(srv -> server = srv);
+        ServerLifecycleEvents.SERVER_STARTED.register(srv -> {
+            server = srv;
+            LOGGER.info("Server started, initializing economy cache from NATS backend...");
+            EconomyManager.getInstance().init();
+        });
+
         ServerLifecycleEvents.SERVER_STOPPING.register(srv -> {
             LOGGER.info("OpenEconomy is shutting down...");
             EconomyManager.getInstance().shutdown();

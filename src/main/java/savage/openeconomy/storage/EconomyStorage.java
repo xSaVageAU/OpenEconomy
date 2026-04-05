@@ -1,135 +1,118 @@
 package savage.openeconomy.storage;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import io.nats.client.KeyValue;
+import io.nats.client.api.KeyValueEntry;
+import savage.natsfabric.NatsManager;
 import savage.openeconomy.OpenEconomy;
-import savage.openeconomy.config.ConfigManager;
 import savage.openeconomy.model.AccountData;
 
-import java.math.BigDecimal;
-import java.nio.file.Path;
-import java.sql.*;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * SQLite-backed storage for OpenEconomy. 
- * Using a simple, direct class to eliminate interface overhead.
+ * NATS-backed storage for OpenEconomy.
  */
 public class EconomyStorage {
-    private static final String TABLE_NAME = "accounts";
-    private Connection connection;
+    private static final String BUCKET_NAME = "economy-balances";
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public EconomyStorage() {
-        connect();
-        createTable();
     }
 
-    private void connect() {
-        try {
-            Path dbFile = ConfigManager.getConfigDir().resolve("balances.db");
-            String url = "jdbc:sqlite:" + dbFile.toAbsolutePath();
-            connection = DriverManager.getConnection(url);
-
-            try (Statement stmt = connection.createStatement()) {
-                stmt.execute("PRAGMA journal_mode=WAL");
-            }
-
-            OpenEconomy.LOGGER.info("Connected to SQLite database: {}", dbFile.getFileName());
-        } catch (SQLException e) {
-            OpenEconomy.LOGGER.error("Failed to connect to SQLite database!", e);
-            throw new RuntimeException("Cannot initialize SQLite storage", e);
+    private KeyValue getBucket() {
+        var bucket = NatsManager.getInstance().getKeyValue(BUCKET_NAME);
+        if (bucket == null) {
+            OpenEconomy.LOGGER.warn("Economy bucket '{}' is not available yet (NATS not connected?).", BUCKET_NAME);
         }
-    }
-
-    private void createTable() {
-        String sql = """
-                CREATE TABLE IF NOT EXISTS %s (
-                    uuid TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    balance TEXT NOT NULL DEFAULT '0.0'
-                )
-                """.formatted(TABLE_NAME);
-
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute(sql);
-        } catch (SQLException e) {
-            OpenEconomy.LOGGER.error("Failed to create accounts table!", e);
-            throw new RuntimeException("Cannot create accounts table", e);
-        }
+        return bucket;
     }
 
     public AccountData loadAccount(UUID uuid) {
-        String sql = "SELECT name, balance FROM %s WHERE uuid = ?".formatted(TABLE_NAME);
+        KeyValue bucket = getBucket();
+        if (bucket == null) return null;
 
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, uuid.toString());
-            ResultSet rs = stmt.executeQuery();
-
-            if (rs.next()) {
-                String name = rs.getString("name");
-                String balanceStr = rs.getString("balance");
-                BigDecimal balance = new BigDecimal(balanceStr != null ? balanceStr : "0");
-                return new AccountData(name, balance);
+        try {
+            var entry = bucket.get(uuid.toString());
+            if (entry != null && entry.getValue() != null) {
+                return GSON.fromJson(new String(entry.getValue()), AccountData.class);
             }
-            return null;
-        } catch (SQLException e) {
-            OpenEconomy.LOGGER.error("Failed to load account for UUID: {}", uuid, e);
-            return null;
+        } catch (Exception e) {
+            OpenEconomy.LOGGER.error("Failed to load account from NATS: {}", uuid, e);
         }
+        return null;
     }
 
     public void saveAccount(UUID uuid, AccountData data) {
-        String sql = "INSERT OR REPLACE INTO %s (uuid, name, balance) VALUES (?, ?, ?)".formatted(TABLE_NAME);
+        KeyValue bucket = getBucket();
+        if (bucket == null) return;
 
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, uuid.toString());
-            stmt.setString(2, data.name());
-            stmt.setString(3, data.balance().toPlainString());
-            stmt.executeUpdate();
-        } catch (SQLException e) {
-            OpenEconomy.LOGGER.error("Failed to save account for UUID: {}", uuid, e);
+        try {
+            bucket.put(uuid.toString(), GSON.toJson(data).getBytes());
+        } catch (Exception e) {
+            OpenEconomy.LOGGER.error("Failed to save account to NATS: {}", uuid, e);
         }
     }
 
     public void deleteAccount(UUID uuid) {
-        String sql = "DELETE FROM %s WHERE uuid = ?".formatted(TABLE_NAME);
+        KeyValue bucket = getBucket();
+        if (bucket == null) return;
 
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, uuid.toString());
-            stmt.executeUpdate();
-        } catch (SQLException e) {
-            OpenEconomy.LOGGER.error("Failed to delete account for UUID: {}", uuid, e);
+        try {
+            bucket.delete(uuid.toString());
+        } catch (Exception e) {
+            OpenEconomy.LOGGER.error("Failed to delete account from NATS: {}", uuid, e);
         }
     }
 
     public Map<UUID, AccountData> loadAllAccounts() {
         Map<UUID, AccountData> accounts = new HashMap<>();
-        String sql = "SELECT uuid, name, balance FROM %s".formatted(TABLE_NAME);
+        KeyValue bucket = getBucket();
+        if (bucket == null) return accounts;
 
-        try (Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                UUID uuid = UUID.fromString(rs.getString("uuid"));
-                String name = rs.getString("name");
-                String balanceStr = rs.getString("balance");
-                BigDecimal balance = new BigDecimal(balanceStr != null ? balanceStr : "0");
-                accounts.put(uuid, new AccountData(name, balance));
+        try {
+            List<String> keys = bucket.keys();
+            for (String key : keys) {
+                var entry = bucket.get(key);
+                if (entry != null && entry.getValue() != null) {
+                    try {
+                        UUID uuid = UUID.fromString(key);
+                        AccountData data = GSON.fromJson(new String(entry.getValue()), AccountData.class);
+                        accounts.put(uuid, data);
+                    } catch (Exception ignored) {}
+                }
             }
-        } catch (SQLException e) {
-            OpenEconomy.LOGGER.error("Failed to load all accounts!", e);
+        } catch (Exception e) {
+            if (!e.getMessage().contains("no keys found")) {
+                OpenEconomy.LOGGER.error("Failed to load all accounts from NATS", e);
+            }
         }
 
         return accounts;
     }
 
-    public void shutdown() {
+    public void watch(java.util.function.Consumer<KeyValueEntry> watcher) {
+        KeyValue bucket = getBucket();
+        if (bucket == null) return;
         try {
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
-                OpenEconomy.LOGGER.info("SQLite connection closed.");
-            }
-        } catch (SQLException e) {
-            OpenEconomy.LOGGER.error("Failed to close SQLite connection!", e);
+            bucket.watchAll(new io.nats.client.api.KeyValueWatcher() {
+                @Override
+                public void watch(KeyValueEntry entry) {
+                    watcher.accept(entry);
+                }
+
+                @Override
+                public void endOfData() {}
+            });
+        } catch (Exception e) {
+            OpenEconomy.LOGGER.error("Failed to start NATS watch for economy balances", e);
         }
+    }
+
+    public void shutdown() {
+        OpenEconomy.LOGGER.info("EconomyStorage shutdown (NATS backend).");
     }
 }

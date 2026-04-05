@@ -7,14 +7,10 @@ import savage.openeconomy.storage.EconomyStorage;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * EconomyManager for OpenEconomy. 
- * Provides thread-safe in-memory caching with write-through to SQLite.
+ * EconomyManager for OpenEconomy.
  */
 public class EconomyManager {
 
@@ -25,18 +21,44 @@ public class EconomyManager {
     private final Map<UUID, AccountData> cache = new ConcurrentHashMap<>();
     private final Map<String, UUID> reverseCache = new ConcurrentHashMap<>();
     private final EconomyStorage storage = new EconomyStorage();
+    private static final com.google.gson.Gson GSON = new com.google.gson.GsonBuilder().create();
 
-    private final ExecutorService diskExecutor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "OpenEconomy-Storage-Thread");
-        t.setDaemon(true);
-        return t;
-    });
 
     private EconomyManager() {
-        var all = storage.loadAllAccounts();
-        cache.putAll(all);
-        all.forEach((uuid, data) -> reverseCache.put(data.name().toLowerCase(), uuid));
-        OpenEconomy.LOGGER.info("Loaded {} accounts into memory.", cache.size());
+    }
+
+    public void init() {
+        storage.watch(entry -> {
+            if (entry.getValue() == null) return;
+            try {
+                UUID uuid = UUID.fromString(entry.getKey());
+                AccountData data = GSON.fromJson(new String(entry.getValue()), AccountData.class);
+                updateCacheInternally(uuid, data);
+            } catch (Exception e) {
+            }
+        });
+        OpenEconomy.LOGGER.info("Real-time NATS synchronization active.");
+    }
+
+    private void updateCacheInternally(UUID uuid, AccountData newData) {
+        AccountData oldData = cache.get(uuid);
+        cache.put(uuid, newData);
+        reverseCache.put(newData.name().toLowerCase(), uuid);
+
+        if (oldData != null && newData.balance().compareTo(oldData.balance()) != 0) {
+            notifyLocalPlayer(uuid, oldData.balance(), newData.balance());
+        }
+    }
+
+    private void notifyLocalPlayer(UUID uuid, BigDecimal oldBal, BigDecimal newBal) {
+        var server = OpenEconomy.getServer();
+        if (server == null) return;
+        var player = server.getPlayerList().getPlayer(uuid);
+        if (player == null) return;
+
+        BigDecimal diff = newBal.subtract(oldBal);
+        String color = diff.compareTo(BigDecimal.ZERO) >= 0 ? "§a+" : "§c";
+        player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§7[§6Economy§7] Your balance updated: " + color + format(diff) + " §7(New: §e" + format(newBal) + "§7)"));
     }
 
     public static EconomyManager getInstance() {
@@ -114,7 +136,7 @@ public class EconomyManager {
     }
 
     private void saveAsync(UUID uuid, AccountData data) {
-        diskExecutor.execute(() -> storage.saveAccount(uuid, data));
+        storage.saveAccount(uuid, data);
     }
 
     public void resetBalance(UUID uuid) {
@@ -143,16 +165,6 @@ public class EconomyManager {
     }
 
     public void shutdown() {
-        OpenEconomy.LOGGER.info("Stopping storage executor...");
-        diskExecutor.shutdown();
-        try {
-            if (!diskExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                diskExecutor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            diskExecutor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
         storage.shutdown();
     }
 }
