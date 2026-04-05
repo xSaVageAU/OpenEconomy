@@ -10,21 +10,38 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - name: checkout repository
+      - name: checkout OpenEconomy
         uses: actions/checkout@v4
-      - name: validate gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
+        with:
+          path: OpenEconomy
+
+      - name: checkout NATS-Fabric
+        uses: actions/checkout@v4
+        with:
+          repository: xSaVageAU/NATS-Fabric
+          path: nats-fabric-lib
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: setup jdk
         uses: actions/setup-java@v4
         with:
           java-version: '25'
           distribution: 'microsoft'
-      - name: make gradle wrapper executable
-        run: chmod +x ./gradlew
-      - name: build
-        run: ./gradlew build
+
+      - name: build and publish NATS-Fabric
+        run: |
+          cd nats-fabric-lib
+          chmod +x ./gradlew
+          ./gradlew publishToMavenLocal
+
+      - name: build OpenEconomy
+        run: |
+          cd OpenEconomy
+          chmod +x ./gradlew
+          ./gradlew build
+
       - name: capture build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Artifacts
-          path: build/libs/
+          path: OpenEconomy/build/libs/
