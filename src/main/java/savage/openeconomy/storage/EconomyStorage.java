@@ -24,11 +24,25 @@ public class EconomyStorage {
     }
 
     private KeyValue getBucket() {
-        var bucket = NatsManager.getInstance().getKeyValue(BUCKET_NAME);
-        if (bucket == null) {
-            OpenEconomy.LOGGER.warn("Economy bucket '{}' is not available yet (NATS not connected?).", BUCKET_NAME);
+        var conn = NatsManager.getInstance().getConnection();
+        if (conn == null) {
+            OpenEconomy.LOGGER.warn("NATS connection not available yet.");
+            return null;
         }
-        return bucket;
+        try {
+            return conn.keyValue(BUCKET_NAME);
+        } catch (Exception e) {
+            try {
+                io.nats.client.KeyValueManagement kvm = conn.keyValueManagement();
+                kvm.create(io.nats.client.api.KeyValueConfiguration.builder()
+                    .name(BUCKET_NAME)
+                    .build());
+                return conn.keyValue(BUCKET_NAME);
+            } catch (Exception e2) {
+                OpenEconomy.LOGGER.error("Failed to create/get economy bucket '{}': {}", BUCKET_NAME, e2.getMessage());
+            }
+        }
+        return null;
     }
 
     public AccountData loadAccount(UUID uuid) {
