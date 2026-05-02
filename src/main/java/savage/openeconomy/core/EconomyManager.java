@@ -50,17 +50,20 @@ public class EconomyManager {
     }
 
     private void updateCacheInternally(UUID uuid, AccountData newData) {
-        AccountData oldData = cache.get(uuid);
-        cache.put(uuid, newData);
-        reverseCache.put(newData.name().toLowerCase(), uuid);
+        cache.compute(uuid, (key, oldData) -> {
+            // Clean up stale reverse-cache entry if name changed
+            if (oldData != null && !oldData.name().equalsIgnoreCase(newData.name())) {
+                reverseCache.remove(oldData.name().toLowerCase());
+            }
+            reverseCache.put(newData.name().toLowerCase(), uuid);
 
-        if (oldData != null && newData.balance().compareTo(oldData.balance()) != 0) {
-            EconomyMessages.sendBalanceUpdate(uuid, newData.balance().subtract(oldBal(oldData)), newData.balance());
-        }
-    }
-
-    private BigDecimal oldBal(AccountData data) {
-        return data != null ? data.balance() : BigDecimal.ZERO;
+            // Notify the player if their balance actually changed
+            if (oldData != null && newData.balance().compareTo(oldData.balance()) != 0) {
+                BigDecimal diff = newData.balance().subtract(oldData.balance());
+                EconomyMessages.sendBalanceUpdate(uuid, diff, newData.balance());
+            }
+            return newData;
+        });
     }
 
     public BigDecimal getBalance(UUID uuid) {
