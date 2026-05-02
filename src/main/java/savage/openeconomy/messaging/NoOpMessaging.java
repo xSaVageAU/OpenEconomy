@@ -1,4 +1,4 @@
-package savage.openeconomy.storage;
+package savage.openeconomy.messaging;
 
 import savage.openeconomy.api.AccountData;
 import savage.openeconomy.api.EconomyMessaging;

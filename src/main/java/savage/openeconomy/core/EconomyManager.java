@@ -6,7 +6,7 @@ import savage.openeconomy.api.EconomyMessaging;
 import savage.openeconomy.api.EconomyStorage;
 import savage.openeconomy.config.EconomyConfig;
 import savage.openeconomy.storage.AsyncStorage;
-import savage.openeconomy.storage.MessagingRegistry;
+import savage.openeconomy.messaging.MessagingRegistry;
 import savage.openeconomy.storage.StorageRegistry;
 import savage.openeconomy.util.EconomyMessages;
 

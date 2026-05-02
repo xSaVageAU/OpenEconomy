@@ -1,4 +1,4 @@
-package savage.openeconomy.storage;
+package savage.openeconomy.messaging;
 
 import net.fabricmc.loader.api.FabricLoader;
 import savage.openeconomy.OpenEconomy;
