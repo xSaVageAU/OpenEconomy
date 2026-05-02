@@ -1,0 +1,29 @@
+{
+	"schemaVersion": 1,
+	"id": "open-economy-nats",
+	"version": "${version}",
+	"name": "OpenEconomy NATS Provider",
+	"description": "NATS JetStream KV storage and pub/sub messaging provider for OpenEconomy.",
+	"authors": [
+		"Savage"
+	],
+	"contact": {
+		"sources": "https://github.com/xSaVageAU/OpenEconomy"
+	},
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"openeconomy:storage": [
+			"savage.openeconomy.nats.NatsStorageProvider"
+		],
+		"openeconomy:messaging": [
+			"savage.openeconomy.nats.NatsMessagingProvider"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.18.5",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"open-economy": "*"
+	}
+}

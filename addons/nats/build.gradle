@@ -1,0 +1,25 @@
+/**
+ * OpenEconomy NATS Addon — JetStream KV storage + pub/sub messaging.
+ */
+base {
+	archivesName = "open-economy-nats"
+}
+
+loom {
+	mods {
+		"open-economy-nats" {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+dependencies {
+	// Core API available at compile time (loaded by Fabric at runtime)
+	compileOnly project(":core")
+
+	// NATS client
+	include(implementation("io.nats:jnats:2.25.2"))
+
+	// YAML for config (provided at runtime by core's JiJ)
+	compileOnly "org.yaml:snakeyaml:2.2"
+}

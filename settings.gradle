@@ -16,4 +16,4 @@ pluginManagement {
 rootProject.name = 'open-economy'
 
 include 'core'
-// include 'addons:nats'     // uncomment when ready
+include 'addons:nats'
