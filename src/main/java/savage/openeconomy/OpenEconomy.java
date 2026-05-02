@@ -12,6 +12,7 @@ import savage.openeconomy.command.EconomyCommands;
 import savage.openeconomy.config.ConfigManager;
 import savage.openeconomy.config.EconomyConfig;
 import savage.openeconomy.integration.OpenEconomyProvider;
+import savage.openeconomy.storage.StorageRegistry;
 
 public class OpenEconomy implements ModInitializer {
     public static final String MOD_ID = "open-economy";
@@ -28,6 +29,7 @@ public class OpenEconomy implements ModInitializer {
         LOGGER.info("OpenEconomy is initializing...");
 
         ConfigManager.load();
+        StorageRegistry.discoverProviders();
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> 
             EconomyCommands.register(dispatcher));
@@ -39,7 +41,7 @@ public class OpenEconomy implements ModInitializer {
 
         ServerLifecycleEvents.SERVER_STARTED.register(srv -> {
             server = srv;
-            LOGGER.info("Server started, initializing economy cache from NATS backend...");
+            LOGGER.info("Server started, initializing economy cache...");
             EconomyManager.getInstance().init();
         });
 

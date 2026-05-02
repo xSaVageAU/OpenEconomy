@@ -15,6 +15,7 @@ public class EconomyConfig {
     public boolean symbolBeforeAmount = true;
     public String currencyName = "Dollar";
     public String currencyNamePlural = "Dollars";
+    public String storageType = "json"; // "json" is the default internal storage
 
     public BigDecimal defaultBalanceDecimal() {
         return new BigDecimal(defaultBalance);

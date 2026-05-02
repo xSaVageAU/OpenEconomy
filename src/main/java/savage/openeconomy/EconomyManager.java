@@ -1,8 +1,9 @@
 package savage.openeconomy;
 
 import savage.openeconomy.config.EconomyConfig;
-import savage.openeconomy.model.AccountData;
-import savage.openeconomy.storage.EconomyStorage;
+import savage.openeconomy.api.AccountData;
+import savage.openeconomy.api.EconomyStorage;
+import savage.openeconomy.storage.StorageRegistry;
 
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
@@ -20,24 +21,26 @@ public class EconomyManager {
 
     private final Map<UUID, AccountData> cache = new ConcurrentHashMap<>();
     private final Map<String, UUID> reverseCache = new ConcurrentHashMap<>();
-    private final EconomyStorage storage = new EconomyStorage();
-    private static final com.google.gson.Gson GSON = new com.google.gson.GsonBuilder().create();
+    private EconomyStorage storage;
 
 
     private EconomyManager() {
     }
 
     public void init() {
-        storage.watch(entry -> {
-            if (entry.getValue() == null) return;
-            try {
-                UUID uuid = UUID.fromString(entry.getKey());
-                AccountData data = GSON.fromJson(new String(entry.getValue()), AccountData.class);
-                updateCacheInternally(uuid, data);
-            } catch (Exception e) {
-            }
+        String type = EconomyConfig.instance().storageType;
+        storage = StorageRegistry.create(type);
+        OpenEconomy.LOGGER.info("Initialized storage backend: {}", type);
+
+        // Load all existing accounts into cache
+        storage.loadAllAccounts().forEach((uuid, data) -> {
+            cache.put(uuid, data);
+            reverseCache.put(data.name().toLowerCase(), uuid);
         });
-        OpenEconomy.LOGGER.info("Real-time NATS synchronization active.");
+
+        storage.watch(update -> {
+            updateCacheInternally(update.uuid(), update.data());
+        });
     }
 
     private void updateCacheInternally(UUID uuid, AccountData newData) {
