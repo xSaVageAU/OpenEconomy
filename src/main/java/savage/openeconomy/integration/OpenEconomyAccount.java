@@ -8,7 +8,7 @@ import eu.pb4.common.economy.api.EconomyTransaction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
-import savage.openeconomy.EconomyManager;
+import savage.openeconomy.core.EconomyManager;
 import savage.openeconomy.OpenEconomy;
 import savage.openeconomy.config.EconomyConfig;
 

@@ -6,8 +6,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import savage.openeconomy.EconomyManager;
 import savage.openeconomy.config.EconomyConfig;
+
+import savage.openeconomy.util.CurrencyFormatter;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -37,7 +38,7 @@ public class OpenEconomyCurrency implements EconomyCurrency {
     @Override
     public String formatValue(BigInteger value, boolean full) {
         BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal("100"));
-        return EconomyManager.getInstance().format(dollars);
+        return CurrencyFormatter.format(dollars);
     }
 
     @Override

@@ -1,48 +1,52 @@
-package savage.openeconomy;
+package savage.openeconomy.core;
 
-import savage.openeconomy.config.EconomyConfig;
+import savage.openeconomy.OpenEconomy;
 import savage.openeconomy.api.AccountData;
 import savage.openeconomy.api.EconomyStorage;
+import savage.openeconomy.config.EconomyConfig;
+import savage.openeconomy.storage.AsyncStorage;
 import savage.openeconomy.storage.StorageRegistry;
+import savage.openeconomy.util.EconomyMessages;
 
 import java.math.BigDecimal;
-import java.text.DecimalFormat;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * EconomyManager for OpenEconomy.
+ * Core manager for the economy system.
+ * Handles caching, account lifecycle, and coordinates storage.
  */
 public class EconomyManager {
 
     public static final BigDecimal MAX_BALANCE = new BigDecimal("1000000000000000"); // 1 Quadrillion
     private static final EconomyManager INSTANCE = new EconomyManager();
-    private static final ThreadLocal<DecimalFormat> FORMATTER = ThreadLocal.withInitial(() -> new DecimalFormat("#,##0.00"));
 
     private final Map<UUID, AccountData> cache = new ConcurrentHashMap<>();
     private final Map<String, UUID> reverseCache = new ConcurrentHashMap<>();
-    private final ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor();
-    private final Map<UUID, CompletableFuture<?>> pendingSaves = new ConcurrentHashMap<>();
     private EconomyStorage storage;
 
+    private EconomyManager() {}
 
-    private EconomyManager() {
+    public static EconomyManager getInstance() {
+        return INSTANCE;
     }
 
     public void init() {
         String type = EconomyConfig.instance().storageType;
-        storage = StorageRegistry.create(type);
-        OpenEconomy.LOGGER.info("Initialized storage backend: {}", type);
+        // Wrap the chosen storage in AsyncStorage to handle non-blocking I/O
+        this.storage = new AsyncStorage(StorageRegistry.create(type));
+        OpenEconomy.LOGGER.info("Economy initialized with storage: {}", type);
 
-        // Load all existing accounts into cache
+        // Load existing data into memory
         storage.loadAllAccounts().forEach((uuid, data) -> {
             cache.put(uuid, data);
             reverseCache.put(data.name().toLowerCase(), uuid);
         });
 
-        storage.watch(update -> {
-            updateCacheInternally(update.uuid(), update.data());
-        });
+        // Listen for external updates (e.g. from other servers/NATS if implemented)
+        storage.watch(update -> updateCacheInternally(update.uuid(), update.data()));
     }
 
     private void updateCacheInternally(UUID uuid, AccountData newData) {
@@ -51,36 +55,25 @@ public class EconomyManager {
         reverseCache.put(newData.name().toLowerCase(), uuid);
 
         if (oldData != null && newData.balance().compareTo(oldData.balance()) != 0) {
-            notifyLocalPlayer(uuid, oldData.balance(), newData.balance());
+            EconomyMessages.sendBalanceUpdate(uuid, newData.balance().subtract(oldBal(oldData)), newData.balance());
         }
     }
 
-    private void notifyLocalPlayer(UUID uuid, BigDecimal oldBal, BigDecimal newBal) {
-        var server = OpenEconomy.getServer();
-        if (server == null) return;
-        var player = server.getPlayerList().getPlayer(uuid);
-        if (player == null) return;
-
-        BigDecimal diff = newBal.subtract(oldBal);
-        String color = diff.compareTo(BigDecimal.ZERO) >= 0 ? "§a+" : "§c";
-        player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§7[§6Economy§7] Your balance updated: " + color + format(diff) + " §7(New: §e" + format(newBal) + "§7)"));
-    }
-
-    public static EconomyManager getInstance() {
-        return INSTANCE;
+    private BigDecimal oldBal(AccountData data) {
+        return data != null ? data.balance() : BigDecimal.ZERO;
     }
 
     public BigDecimal getBalance(UUID uuid) {
-        var d = cache.get(uuid);
-        return d != null ? d.balance() : EconomyConfig.instance().defaultBalanceDecimal();
+        AccountData data = cache.get(uuid);
+        return data != null ? data.balance() : EconomyConfig.instance().defaultBalanceDecimal();
     }
 
-    public void setBalance(UUID uuid, BigDecimal bal) {
-        final BigDecimal clamped = bal.min(MAX_BALANCE).max(BigDecimal.ZERO);
+    public void setBalance(UUID uuid, BigDecimal balance) {
+        final BigDecimal clamped = balance.min(MAX_BALANCE).max(BigDecimal.ZERO);
         cache.compute(uuid, (key, existing) -> {
             String name = existing != null ? existing.name() : "Unknown";
             AccountData updated = new AccountData(name, clamped);
-            saveAsync(uuid, updated);
+            storage.saveAccount(uuid, updated);
             return updated;
         });
     }
@@ -91,7 +84,7 @@ public class EconomyManager {
             AccountData current = (existing != null) ? existing : loadFromStorageOrNew(uuid, null);
             BigDecimal newBal = current.balance().add(amount).min(MAX_BALANCE);
             AccountData updated = new AccountData(current.name(), newBal);
-            saveAsync(uuid, updated);
+            storage.saveAccount(uuid, updated);
             return updated;
         });
         return true;
@@ -105,7 +98,7 @@ public class EconomyManager {
             if (current.balance().compareTo(amount) < 0) return existing;
 
             AccountData updated = new AccountData(current.name(), current.balance().subtract(amount));
-            saveAsync(uuid, updated);
+            storage.saveAccount(uuid, updated);
             success[0] = true;
             return updated;
         });
@@ -119,7 +112,7 @@ public class EconomyManager {
                     reverseCache.remove(existing.name().toLowerCase());
                     AccountData updated = new AccountData(name, existing.balance());
                     reverseCache.put(name.toLowerCase(), uuid);
-                    saveAsync(uuid, updated);
+                    storage.saveAccount(uuid, updated);
                     return updated;
                 }
                 return existing;
@@ -127,7 +120,7 @@ public class EconomyManager {
 
             AccountData loaded = loadFromStorageOrNew(uuid, name);
             if (name != null) reverseCache.put(name.toLowerCase(), uuid);
-            saveAsync(uuid, loaded);
+            storage.saveAccount(uuid, loaded);
             return loaded;
         });
     }
@@ -138,16 +131,6 @@ public class EconomyManager {
             d = new AccountData(name != null ? name : "Unknown", EconomyConfig.instance().defaultBalanceDecimal());
         }
         return d;
-    }
-
-    private void saveAsync(UUID uuid, AccountData data) {
-        pendingSaves.compute(uuid, (id, existing) -> {
-            if (existing == null || existing.isDone()) {
-                return CompletableFuture.runAsync(() -> storage.saveAccount(uuid, data), ioExecutor);
-            } else {
-                return existing.thenRunAsync(() -> storage.saveAccount(uuid, data), ioExecutor);
-            }
-        });
     }
 
     public void resetBalance(UUID uuid) {
@@ -161,12 +144,6 @@ public class EconomyManager {
                 .toList();
     }
 
-    public String format(BigDecimal bal) {
-        var cfg = EconomyConfig.instance();
-        var f = FORMATTER.get().format(bal);
-        return cfg.symbolBeforeAmount ? cfg.currencySymbol + f : f + cfg.currencySymbol;
-    }
-
     public UUID getUUIDFromName(String name) {
         return reverseCache.get(name.toLowerCase());
     }
@@ -176,18 +153,6 @@ public class EconomyManager {
     }
 
     public void shutdown() {
-        OpenEconomy.LOGGER.info("Shutting down EconomyManager, flushing pending saves...");
-
-        try {
-            // Wait for all pending saves to finish (max 10 seconds)
-            CompletableFuture.allOf(pendingSaves.values().toArray(new CompletableFuture[0]))
-                    .orTimeout(10, TimeUnit.SECONDS)
-                    .join();
-        } catch (Exception e) {
-            OpenEconomy.LOGGER.error("Error or timeout while flushing economy saves: {}", e.getMessage());
-        }
-
-        ioExecutor.shutdown();
-        storage.shutdown();
+        if (storage != null) storage.shutdown();
     }
 }

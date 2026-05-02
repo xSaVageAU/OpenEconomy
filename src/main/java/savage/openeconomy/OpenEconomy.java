@@ -9,6 +9,7 @@ import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import savage.openeconomy.command.EconomyCommands;
+import savage.openeconomy.core.EconomyManager;
 import savage.openeconomy.config.ConfigManager;
 import savage.openeconomy.config.EconomyConfig;
 import savage.openeconomy.integration.OpenEconomyProvider;
