@@ -1,4 +1,4 @@
-package savage.openeconomy.nats;
+package savage.openeconomy.nats.messaging;
 
 import savage.openeconomy.api.EconomyMessaging;
 import savage.openeconomy.api.MessagingProvider;

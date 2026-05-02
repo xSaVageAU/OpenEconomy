@@ -1,4 +1,4 @@
-package savage.openeconomy.nats;
+package savage.openeconomy.nats.storage;
 
 import savage.openeconomy.api.EconomyStorage;
 import savage.openeconomy.api.StorageProvider;

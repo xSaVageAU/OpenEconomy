@@ -1,4 +1,7 @@
-package savage.openeconomy.nats;
+package savage.openeconomy.nats.storage;
+
+import savage.openeconomy.nats.NatsConnection;
+import savage.openeconomy.nats.NatsConfig;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
