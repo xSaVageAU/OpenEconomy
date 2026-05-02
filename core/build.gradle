@@ -1,0 +1,26 @@
+/**
+ * OpenEconomy Core — the economy framework.
+ * Shared config (Java, repos, MC deps, etc.) is inherited from the root build.gradle.
+ */
+base {
+	archivesName = project.archives_base_name
+}
+
+loom {
+	mods {
+		"open-economy" {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+dependencies {
+	// Common Economy API
+	include(implementation("eu.pb4:common-economy-api:2.0.0"))
+
+	// Permissions API
+	include(implementation("me.lucko:fabric-permissions-api:0.7.0"))
+
+	// YAML Config
+	include(implementation("org.yaml:snakeyaml:2.2"))
+}
