@@ -1,5 +1,6 @@
 package savage.openeconomy.util;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import savage.openeconomy.OpenEconomy;
@@ -22,12 +23,20 @@ public class EconomyMessages {
         ServerPlayer player = server.getPlayerList().getPlayer(uuid);
         if (player == null) return;
 
-        String color = diff.compareTo(BigDecimal.ZERO) >= 0 ? "§a+" : "§c";
-        String message = String.format("§7[§6Economy§7] Your balance updated: %s%s §7(New: §e%s§7)",
-                color,
-                CurrencyFormatter.format(diff.abs()),
-                CurrencyFormatter.format(newBalance));
+        boolean isPositive = diff.compareTo(BigDecimal.ZERO) >= 0;
+        ChatFormatting diffColor = isPositive ? ChatFormatting.GREEN : ChatFormatting.RED;
+        String diffPrefix = isPositive ? "+" : "";
 
-        player.sendSystemMessage(Component.literal(message));
+        Component message = Component.empty()
+                .append(Component.literal("[").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal("Economy").withStyle(ChatFormatting.GOLD))
+                .append(Component.literal("] ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal("Your balance updated: ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(diffPrefix + CurrencyFormatter.format(diff.abs())).withStyle(diffColor))
+                .append(Component.literal(" (New: ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(CurrencyFormatter.format(newBalance)).withStyle(ChatFormatting.YELLOW))
+                .append(Component.literal(")").withStyle(ChatFormatting.GRAY));
+
+        player.sendSystemMessage(message);
     }
 }

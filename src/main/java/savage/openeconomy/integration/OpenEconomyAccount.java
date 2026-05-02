@@ -5,6 +5,7 @@ import eu.pb4.common.economy.api.EconomyAccount;
 import eu.pb4.common.economy.api.EconomyCurrency;
 import eu.pb4.common.economy.api.EconomyProvider;
 import eu.pb4.common.economy.api.EconomyTransaction;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
@@ -117,9 +118,13 @@ public class OpenEconomyAccount implements EconomyAccount {
                 ? oec.formatValue(rawValue, true)
                 : rawValue.toString();
 
-        String prefix = isIncrease ? "§a+" : "§c-";
-        String message = "§e[Economy] " + prefix + formatted;
+        ChatFormatting color = isIncrease ? ChatFormatting.GREEN : ChatFormatting.RED;
+        String prefix = isIncrease ? "+" : "-";
 
-        server.execute(() -> player.sendSystemMessage(Component.literal(message), true));
+        Component message = Component.empty()
+                .append(Component.literal("[Economy] ").withStyle(ChatFormatting.YELLOW))
+                .append(Component.literal(prefix + formatted).withStyle(color));
+
+        server.execute(() -> player.sendSystemMessage(message, true));
     }
 }

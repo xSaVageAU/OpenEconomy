@@ -4,6 +4,7 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import savage.openeconomy.core.EconomyManager;
 import savage.openeconomy.util.CurrencyFormatter;
@@ -20,7 +21,9 @@ public class EconomyCommands {
             var player = source.getPlayerOrException();
             
             var balance = EconomyManager.getInstance().getBalance(player.getUUID());
-            source.sendSuccess(() -> Component.literal("§7Your balance: §e" + CurrencyFormatter.format(balance)), false);
+            source.sendSuccess(() -> Component.empty()
+                    .append(Component.literal("Your balance: ").withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal(CurrencyFormatter.format(balance)).withStyle(ChatFormatting.YELLOW)), false);
             
             return 1;
         };
