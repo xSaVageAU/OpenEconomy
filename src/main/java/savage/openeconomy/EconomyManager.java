@@ -8,7 +8,7 @@ import savage.openeconomy.storage.StorageRegistry;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 /**
  * EconomyManager for OpenEconomy.
@@ -21,6 +21,8 @@ public class EconomyManager {
 
     private final Map<UUID, AccountData> cache = new ConcurrentHashMap<>();
     private final Map<String, UUID> reverseCache = new ConcurrentHashMap<>();
+    private final ExecutorService ioExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    private final Map<UUID, CompletableFuture<?>> pendingSaves = new ConcurrentHashMap<>();
     private EconomyStorage storage;
 
 
@@ -139,7 +141,13 @@ public class EconomyManager {
     }
 
     private void saveAsync(UUID uuid, AccountData data) {
-        storage.saveAccount(uuid, data);
+        pendingSaves.compute(uuid, (id, existing) -> {
+            if (existing == null || existing.isDone()) {
+                return CompletableFuture.runAsync(() -> storage.saveAccount(uuid, data), ioExecutor);
+            } else {
+                return existing.thenRunAsync(() -> storage.saveAccount(uuid, data), ioExecutor);
+            }
+        });
     }
 
     public void resetBalance(UUID uuid) {
@@ -168,6 +176,18 @@ public class EconomyManager {
     }
 
     public void shutdown() {
+        OpenEconomy.LOGGER.info("Shutting down EconomyManager, flushing pending saves...");
+
+        try {
+            // Wait for all pending saves to finish (max 10 seconds)
+            CompletableFuture.allOf(pendingSaves.values().toArray(new CompletableFuture[0]))
+                    .orTimeout(10, TimeUnit.SECONDS)
+                    .join();
+        } catch (Exception e) {
+            OpenEconomy.LOGGER.error("Error or timeout while flushing economy saves: {}", e.getMessage());
+        }
+
+        ioExecutor.shutdown();
         storage.shutdown();
     }
 }
