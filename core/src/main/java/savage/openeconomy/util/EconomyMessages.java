@@ -39,4 +39,22 @@ public class EconomyMessages {
 
         player.sendSystemMessage(message);
     }
+
+    public static Component paySent(String target, BigDecimal amount) {
+        return Component.empty()
+                .append(Component.literal("You sent ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(CurrencyFormatter.format(amount)).withStyle(ChatFormatting.GOLD))
+                .append(Component.literal(" to ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(target).withStyle(ChatFormatting.YELLOW))
+                .append(Component.literal(".").withStyle(ChatFormatting.GRAY));
+    }
+
+    public static Component payReceived(String sender, BigDecimal amount) {
+        return Component.empty()
+                .append(Component.literal("You received ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(CurrencyFormatter.format(amount)).withStyle(ChatFormatting.GOLD))
+                .append(Component.literal(" from ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(sender).withStyle(ChatFormatting.YELLOW))
+                .append(Component.literal(".").withStyle(ChatFormatting.GRAY));
+    }
 }
