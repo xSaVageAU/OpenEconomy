@@ -30,18 +30,29 @@ public class AsyncStorage implements EconomyStorage {
     @Override
     public void saveAccount(UUID uuid, AccountData data) {
         pendingSaves.compute(uuid, (id, existing) -> {
-            if (existing == null || existing.isDone()) {
-                return CompletableFuture.runAsync(() -> delegate.saveAccount(uuid, data), ioExecutor);
-            } else {
-                return existing.thenRunAsync(() -> delegate.saveAccount(uuid, data), ioExecutor);
-            }
+            Runnable task = () -> delegate.saveAccount(uuid, data);
+            CompletableFuture<Void> next = (existing == null || existing.isDone())
+                    ? CompletableFuture.runAsync(task, ioExecutor)
+                    : existing.thenRunAsync(task, ioExecutor);
+            return next.exceptionally(ex -> {
+                OpenEconomy.LOGGER.error("Async save failed for {}: {}", uuid, ex.getMessage());
+                return null;
+            });
         });
     }
 
     @Override
     public void deleteAccount(UUID uuid) {
-        // Deletions are also performed async to avoid blocking
-        CompletableFuture.runAsync(() -> delegate.deleteAccount(uuid), ioExecutor);
+        pendingSaves.compute(uuid, (id, existing) -> {
+            Runnable task = () -> delegate.deleteAccount(uuid);
+            CompletableFuture<Void> next = (existing == null || existing.isDone())
+                    ? CompletableFuture.runAsync(task, ioExecutor)
+                    : existing.thenRunAsync(task, ioExecutor);
+            return next.exceptionally(ex -> {
+                OpenEconomy.LOGGER.error("Async delete failed for {}: {}", uuid, ex.getMessage());
+                return null;
+            });
+        });
     }
 
     @Override
