@@ -37,7 +37,7 @@ public class OpenEconomyCurrency implements EconomyCurrency {
 
     @Override
     public String formatValue(BigInteger value, boolean full) {
-        BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal("100"));
+        BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal(EconomyConfig.instance().economyScale));
         return CurrencyFormatter.format(dollars);
     }
 

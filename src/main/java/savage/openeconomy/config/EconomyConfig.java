@@ -16,6 +16,7 @@ public class EconomyConfig {
     public String currencyName = "Dollar";
     public String currencyNamePlural = "Dollars";
     public String storageType = "json"; // "json" is the default internal storage
+    public int economyScale = 100; // Multiplier for smallest unit (e.g. 100 = cents to dollars)
 
     public BigDecimal defaultBalanceDecimal() {
         return new BigDecimal(defaultBalance);

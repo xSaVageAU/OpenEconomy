@@ -61,12 +61,12 @@ public class OpenEconomyAccount implements EconomyAccount {
     @Override
     public BigInteger balance() {
         BigDecimal dollars = EconomyManager.getInstance().getBalance(profile.id());
-        return dollars.multiply(new BigDecimal("100")).toBigInteger();
+        return dollars.multiply(new BigDecimal(EconomyConfig.instance().economyScale)).toBigInteger();
     }
 
     @Override
     public void setBalance(BigInteger value) {
-        BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+        BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal(EconomyConfig.instance().economyScale), 2, RoundingMode.HALF_UP);
         EconomyManager.getInstance().setBalance(profile.id(), dollars);
     }
 
