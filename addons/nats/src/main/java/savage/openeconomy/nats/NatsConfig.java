@@ -24,6 +24,7 @@ public class NatsConfig {
             .getConfigDir().resolve("open-economy").resolve("nats.yml");
 
     public String natsUrl = "nats://localhost:4222";
+    public String authToken = "";
     public String kvBucket = "openeconomy-accounts";
     public String subject = "openeconomy.accounts";
 

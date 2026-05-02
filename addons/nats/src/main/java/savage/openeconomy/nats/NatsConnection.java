@@ -27,13 +27,16 @@ public class NatsConnection {
         if (connection == null || connection.getStatus() != Connection.Status.CONNECTED) {
             try {
                 NatsConfig config = NatsConfig.get();
-                Options options = new Options.Builder()
+                Options.Builder builder = new Options.Builder()
                         .server(config.natsUrl)
                         .connectionName("OpenEconomy-" + SERVER_ID.substring(0, 8))
-                        .maxReconnects(-1)
-                        .build();
+                        .maxReconnects(-1);
 
-                connection = Nats.connect(options);
+                if (config.authToken != null && !config.authToken.isEmpty()) {
+                    builder.token(config.authToken.toCharArray());
+                }
+
+                connection = Nats.connect(builder.build());
                 LOGGER.info("Connected to NATS at {}", config.natsUrl);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to connect to NATS", e);
