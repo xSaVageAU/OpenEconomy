@@ -30,7 +30,21 @@ public class NatsConnection {
                 Options.Builder builder = new Options.Builder()
                         .server(config.natsUrl)
                         .connectionName("OpenEconomy-" + SERVER_ID.substring(0, 8))
-                        .maxReconnects(-1);
+                        .maxReconnects(-1)
+                        .connectionListener((conn, type) -> {
+                            LOGGER.info("NATS Connection Event: {}", type);
+                        })
+                        .errorListener(new io.nats.client.ErrorListener() {
+                            @Override
+                            public void errorOccurred(Connection conn, String error) {
+                                LOGGER.error("NATS Error: {}", error);
+                            }
+
+                            @Override
+                            public void exceptionOccurred(Connection conn, Exception exp) {
+                                LOGGER.error("NATS Exception: {}", exp.getMessage());
+                            }
+                        });
 
                 if (config.authToken != null && !config.authToken.isEmpty()) {
                     builder.token(config.authToken.toCharArray());

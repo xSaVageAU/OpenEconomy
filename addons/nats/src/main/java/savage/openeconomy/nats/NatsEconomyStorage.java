@@ -86,7 +86,14 @@ public class NatsEconomyStorage implements EconomyStorage {
     public Map<UUID, AccountData> loadAllAccounts() {
         Map<UUID, AccountData> accounts = new HashMap<>();
         try {
-            List<String> keys = kv.keys();
+            List<String> keys;
+            try {
+                keys = kv.keys();
+            } catch (io.nats.client.JetStreamApiException e) {
+                if (e.getErrorCode() == 404) return accounts; // Bucket empty
+                throw e;
+            }
+
             for (String key : keys) {
                 try {
                     UUID uuid = UUID.fromString(key);
