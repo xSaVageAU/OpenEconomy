@@ -45,8 +45,8 @@ public class EconomyManager {
             reverseCache.put(data.name().toLowerCase(), uuid);
         });
 
-        // Listen for external updates (e.g. from other servers/NATS if implemented)
-        storage.watch(update -> updateCacheInternally(update.uuid(), update.data()));
+        // Listen for external updates (e.g. from other servers/distributed backends)
+        storage.subscribe(update -> updateCacheInternally(update.uuid(), update.data()));
     }
 
     private void updateCacheInternally(UUID uuid, AccountData newData) {

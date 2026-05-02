@@ -50,8 +50,8 @@ public class AsyncStorage implements EconomyStorage {
     }
 
     @Override
-    public void watch(Consumer<AccountUpdate> watcher) {
-        delegate.watch(watcher);
+    public void subscribe(Consumer<AccountUpdate> listener) {
+        delegate.subscribe(listener);
     }
 
     @Override
