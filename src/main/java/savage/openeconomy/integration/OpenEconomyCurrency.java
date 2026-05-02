@@ -52,7 +52,7 @@ public class OpenEconomyCurrency implements EconomyCurrency {
             if (value == null || value.isEmpty()) return BigInteger.ZERO;
             String sanitized = value.replaceAll("[^0-9.\\-]", "");
             if (sanitized.isEmpty() || sanitized.equals("-") || sanitized.equals(".")) return BigInteger.ZERO;
-            return new BigDecimal(sanitized).multiply(new BigDecimal("100")).toBigInteger();
+            return new BigDecimal(sanitized).multiply(new BigDecimal(EconomyConfig.instance().economyScale)).toBigInteger();
         } catch (Exception e) {
             return BigInteger.ZERO;
         }
