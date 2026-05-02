@@ -6,7 +6,7 @@ package savage.openeconomy.api;
  */
 public interface StorageProvider {
     /**
-     * @return The unique ID for this storage type (e.g. "json", "nats", "sql").
+     * @return The unique ID for this storage type (e.g. "json", "redis", "sql").
      */
     String getId();
 

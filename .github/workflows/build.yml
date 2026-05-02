@@ -12,15 +12,6 @@ jobs:
     steps:
       - name: checkout OpenEconomy
         uses: actions/checkout@v4
-        with:
-          path: OpenEconomy
-
-      - name: checkout NATS-Fabric
-        uses: actions/checkout@v4
-        with:
-          repository: xSaVageAU/NATS-Fabric
-          path: nats-fabric-lib
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: setup jdk
         uses: actions/setup-java@v4
@@ -28,15 +19,8 @@ jobs:
           java-version: '25'
           distribution: 'microsoft'
 
-      - name: build and publish NATS-Fabric
-        run: |
-          cd nats-fabric-lib
-          chmod +x ./gradlew
-          ./gradlew publishToMavenLocal
-
       - name: build OpenEconomy
         run: |
-          cd OpenEconomy
           chmod +x ./gradlew
           ./gradlew build
 
@@ -44,4 +28,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Artifacts
-          path: OpenEconomy/build/libs/
+          path: build/libs/
