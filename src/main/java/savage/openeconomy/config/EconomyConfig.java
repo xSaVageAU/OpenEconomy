@@ -18,8 +18,17 @@ public class EconomyConfig {
     public String storageType = "json"; // "json" is the default internal storage
     public int economyScale = 100; // Multiplier for smallest unit (e.g. 100 = cents to dollars)
 
+    private transient BigDecimal cachedDefaultBalance;
+
     public BigDecimal defaultBalanceDecimal() {
-        return new BigDecimal(defaultBalance);
+        if (cachedDefaultBalance == null) {
+            try {
+                cachedDefaultBalance = new BigDecimal(defaultBalance);
+            } catch (NumberFormatException e) {
+                cachedDefaultBalance = new BigDecimal("100.00");
+            }
+        }
+        return cachedDefaultBalance;
     }
 
     public static EconomyConfig instance() {
