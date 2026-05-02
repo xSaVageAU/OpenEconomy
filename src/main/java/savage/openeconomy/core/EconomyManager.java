@@ -98,7 +98,7 @@ public class EconomyManager {
         final boolean[] success = {false};
         cache.compute(uuid, (key, existing) -> {
             AccountData current = (existing != null) ? existing : loadFromStorageOrNew(uuid, null);
-            if (current.balance().compareTo(amount) < 0) return existing;
+            if (current.balance().compareTo(amount) < 0) return current;
 
             AccountData updated = new AccountData(current.name(), current.balance().subtract(amount));
             storage.saveAccount(uuid, updated);
