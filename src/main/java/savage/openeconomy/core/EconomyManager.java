@@ -2,9 +2,11 @@ package savage.openeconomy.core;
 
 import savage.openeconomy.OpenEconomy;
 import savage.openeconomy.api.AccountData;
+import savage.openeconomy.api.EconomyMessaging;
 import savage.openeconomy.api.EconomyStorage;
 import savage.openeconomy.config.EconomyConfig;
 import savage.openeconomy.storage.AsyncStorage;
+import savage.openeconomy.storage.MessagingRegistry;
 import savage.openeconomy.storage.StorageRegistry;
 import savage.openeconomy.util.EconomyMessages;
 
@@ -26,6 +28,7 @@ public class EconomyManager {
     private final Map<UUID, AccountData> cache = new ConcurrentHashMap<>();
     private final Map<String, UUID> reverseCache = new ConcurrentHashMap<>();
     private EconomyStorage storage;
+    private EconomyMessaging messaging;
 
     private EconomyManager() {}
 
@@ -34,10 +37,15 @@ public class EconomyManager {
     }
 
     public void init() {
-        String type = EconomyConfig.instance().storageType;
+        EconomyConfig cfg = EconomyConfig.instance();
+
         // Wrap the chosen storage in AsyncStorage to handle non-blocking I/O
-        this.storage = new AsyncStorage(StorageRegistry.create(type));
-        OpenEconomy.LOGGER.info("Economy initialized with storage: {}", type);
+        this.storage = new AsyncStorage(StorageRegistry.create(cfg.storageType));
+        OpenEconomy.LOGGER.info("Economy initialized with storage: {}", cfg.storageType);
+
+        // Initialize messaging for cross-server cache sync
+        this.messaging = MessagingRegistry.create(cfg.messagingType);
+        OpenEconomy.LOGGER.info("Economy initialized with messaging: {}", cfg.messagingType);
 
         // Load existing data into memory
         storage.loadAllAccounts().forEach((uuid, data) -> {
@@ -45,8 +53,8 @@ public class EconomyManager {
             reverseCache.put(data.name().toLowerCase(), uuid);
         });
 
-        // Listen for external updates (e.g. from other servers/distributed backends)
-        storage.subscribe(update -> updateCacheInternally(update.uuid(), update.data()));
+        // Listen for external updates (e.g. from other servers via messaging)
+        messaging.subscribe(update -> updateCacheInternally(update.uuid(), update.data()));
     }
 
     private void updateCacheInternally(UUID uuid, AccountData newData) {
@@ -77,6 +85,7 @@ public class EconomyManager {
             String name = existing != null ? existing.name() : "Unknown";
             AccountData updated = new AccountData(name, clamped);
             storage.saveAccount(uuid, updated);
+            messaging.publish(uuid, updated);
             return updated;
         });
     }
@@ -88,6 +97,7 @@ public class EconomyManager {
             BigDecimal newBal = current.balance().add(amount).min(MAX_BALANCE);
             AccountData updated = new AccountData(current.name(), newBal);
             storage.saveAccount(uuid, updated);
+            messaging.publish(uuid, updated);
             return updated;
         });
         return true;
@@ -102,6 +112,7 @@ public class EconomyManager {
 
             AccountData updated = new AccountData(current.name(), current.balance().subtract(amount));
             storage.saveAccount(uuid, updated);
+            messaging.publish(uuid, updated);
             success[0] = true;
             return updated;
         });
@@ -116,6 +127,7 @@ public class EconomyManager {
                     AccountData updated = new AccountData(name, existing.balance());
                     reverseCache.put(name.toLowerCase(), uuid);
                     storage.saveAccount(uuid, updated);
+                    messaging.publish(uuid, updated);
                     return updated;
                 }
                 return existing;
@@ -124,6 +136,7 @@ public class EconomyManager {
             AccountData loaded = loadFromStorageOrNew(uuid, name);
             if (name != null) reverseCache.put(name.toLowerCase(), uuid);
             storage.saveAccount(uuid, loaded);
+            messaging.publish(uuid, loaded);
             return loaded;
         });
     }
@@ -156,6 +169,7 @@ public class EconomyManager {
     }
 
     public void shutdown() {
+        if (messaging != null) messaging.shutdown();
         if (storage != null) storage.shutdown();
     }
 }

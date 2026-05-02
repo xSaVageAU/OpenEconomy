@@ -7,7 +7,6 @@ import savage.openeconomy.api.EconomyStorage;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
-import java.util.function.Consumer;
 
 /**
  * A decorator for EconomyStorage that performs save operations asynchronously 
@@ -60,10 +59,6 @@ public class AsyncStorage implements EconomyStorage {
         return delegate.loadAllAccounts();
     }
 
-    @Override
-    public void subscribe(Consumer<AccountUpdate> listener) {
-        delegate.subscribe(listener);
-    }
 
     @Override
     public void shutdown() {

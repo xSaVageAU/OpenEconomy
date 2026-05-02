@@ -13,6 +13,7 @@ import savage.openeconomy.core.EconomyManager;
 import savage.openeconomy.config.ConfigManager;
 import savage.openeconomy.config.EconomyConfig;
 import savage.openeconomy.integration.OpenEconomyProvider;
+import savage.openeconomy.storage.MessagingRegistry;
 import savage.openeconomy.storage.StorageRegistry;
 
 public class OpenEconomy implements ModInitializer {
@@ -31,6 +32,7 @@ public class OpenEconomy implements ModInitializer {
 
         ConfigManager.load();
         StorageRegistry.discoverProviders();
+        MessagingRegistry.discoverProviders();
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> 
             EconomyCommands.register(dispatcher));

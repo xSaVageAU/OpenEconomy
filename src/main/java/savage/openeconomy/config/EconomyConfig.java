@@ -16,6 +16,7 @@ public class EconomyConfig {
     public String currencyName = "Dollar";
     public String currencyNamePlural = "Dollars";
     public String storageType = "json"; // "json" is the default internal storage
+    public String messagingType = "none"; // "none" for single-server, or "redis", "nats", etc.
     public int economyScale = 100; // Multiplier for smallest unit (e.g. 100 = cents to dollars)
 
     private transient BigDecimal cachedDefaultBalance;
