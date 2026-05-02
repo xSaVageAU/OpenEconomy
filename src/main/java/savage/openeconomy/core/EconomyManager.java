@@ -79,37 +79,48 @@ public class EconomyManager {
         return data != null ? data.balance() : EconomyConfig.instance().defaultBalanceDecimal();
     }
 
-    public void setBalance(UUID uuid, BigDecimal balance) {
+    public boolean setBalance(UUID uuid, BigDecimal balance) {
         final BigDecimal clamped = balance.min(MAX_BALANCE).max(BigDecimal.ZERO);
+        final boolean[] success = {false};
         cache.compute(uuid, (key, existing) -> {
-            String name = existing != null ? existing.name() : "Unknown";
-            AccountData updated = new AccountData(name, clamped);
+            AccountData current = (existing != null) ? existing : storage.loadAccount(uuid);
+            if (current == null) {
+                OpenEconomy.LOGGER.warn("Cannot set balance for unknown account: {}", uuid);
+                return null;
+            }
+            AccountData updated = new AccountData(current.name(), clamped);
             storage.saveAccount(uuid, updated);
             messaging.publish(uuid, updated);
+            success[0] = true;
             return updated;
         });
+        return success[0];
     }
 
     public boolean addBalance(UUID uuid, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
+        final boolean[] success = {false};
         cache.compute(uuid, (key, existing) -> {
-            AccountData current = (existing != null) ? existing : loadFromStorageOrNew(uuid, null);
+            AccountData current = (existing != null) ? existing : storage.loadAccount(uuid);
+            if (current == null) return null;
             BigDecimal newBal = current.balance().add(amount).min(MAX_BALANCE);
             AccountData updated = new AccountData(current.name(), newBal);
             storage.saveAccount(uuid, updated);
             messaging.publish(uuid, updated);
+            success[0] = true;
             return updated;
         });
-        return true;
+        return success[0];
     }
 
     public boolean removeBalance(UUID uuid, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
         final boolean[] success = {false};
         cache.compute(uuid, (key, existing) -> {
-            AccountData current = (existing != null) ? existing : loadFromStorageOrNew(uuid, null);
-            if (current.balance().compareTo(amount) < 0) return current;
-
+            AccountData current = (existing != null) ? existing : storage.loadAccount(uuid);
+            if (current == null || current.balance().compareTo(amount) < 0) {
+                return current; // null stays null, existing stays cached
+            }
             AccountData updated = new AccountData(current.name(), current.balance().subtract(amount));
             storage.saveAccount(uuid, updated);
             messaging.publish(uuid, updated);
@@ -133,20 +144,15 @@ public class EconomyManager {
                 return existing;
             }
 
-            AccountData loaded = loadFromStorageOrNew(uuid, name);
+            AccountData loaded = storage.loadAccount(uuid);
+            if (loaded == null) {
+                loaded = new AccountData(name, EconomyConfig.instance().defaultBalanceDecimal());
+            }
             if (name != null) reverseCache.put(name.toLowerCase(), uuid);
             storage.saveAccount(uuid, loaded);
             messaging.publish(uuid, loaded);
             return loaded;
         });
-    }
-
-    private AccountData loadFromStorageOrNew(UUID uuid, String name) {
-        AccountData d = storage.loadAccount(uuid);
-        if (d == null) {
-            d = new AccountData(name != null ? name : "Unknown", EconomyConfig.instance().defaultBalanceDecimal());
-        }
-        return d;
     }
 
     public void resetBalance(UUID uuid) {
