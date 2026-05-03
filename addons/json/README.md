@@ -4,7 +4,7 @@ This is the standard, file-based storage implementation for OpenEconomy. It serv
 
 ## How it Works
 
-*   **File Structure**: Stores individual player accounts as JSON files in the `world/open-economy/` directory.
+*   **File Structure**: Stores individual player accounts as JSON files in the `config/open-economy/accounts/` directory.
 *   **Memory Model**: For performance, this provider loads **all** account data into memory during the server startup phase. 
 *   **Atomicity**: Uses GSON for serialization, ensuring that account data is consistently formatted.
 
