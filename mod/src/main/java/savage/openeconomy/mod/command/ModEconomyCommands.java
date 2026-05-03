@@ -114,6 +114,27 @@ public class ModEconomyCommands {
                             
                             source.sendSuccess(() -> ModMessages.takeSuccess(target.getGameProfile().name(), amount), true);
                             return 1;
+                        }))))
+                .then(Commands.literal("set")
+                        .then(Commands.argument("target", net.minecraft.commands.arguments.EntityArgument.player())
+                        .then(Commands.argument("amount", com.mojang.brigadier.arguments.StringArgumentType.string())
+                        .executes(context -> {
+                            var source = context.getSource();
+                            var target = net.minecraft.commands.arguments.EntityArgument.getPlayer(context, "target");
+                            
+                            BigDecimal amount;
+                            try {
+                                amount = new BigDecimal(com.mojang.brigadier.arguments.StringArgumentType.getString(context, "amount"));
+                                if (amount.compareTo(BigDecimal.ZERO) < 0) throw new NumberFormatException();
+                            } catch (Exception e) {
+                                source.sendFailure(Component.literal("Invalid amount!").withStyle(ChatFormatting.RED));
+                                return 0;
+                            }
+
+                            EconomyManager.getInstance().setBalance(target.getUUID(), amount);
+                            
+                            source.sendSuccess(() -> ModMessages.setSuccess(target.getGameProfile().name(), amount), true);
+                            return 1;
                         })))));
     }
 }

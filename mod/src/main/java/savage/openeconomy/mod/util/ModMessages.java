@@ -45,4 +45,13 @@ public class ModMessages {
                 .append(Component.literal(target).withStyle(ChatFormatting.YELLOW))
                 .append(Component.literal(".").withStyle(ChatFormatting.GRAY));
     }
+
+    public static Component setSuccess(String target, BigDecimal amount) {
+        return Component.empty()
+                .append(Component.literal("Set ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(target).withStyle(ChatFormatting.YELLOW))
+                .append(Component.literal("'s balance to ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(CurrencyFormatter.format(amount)).withStyle(ChatFormatting.GOLD))
+                .append(Component.literal(".").withStyle(ChatFormatting.GRAY));
+    }
 }
