@@ -1,6 +1,5 @@
 package savage.openeconomy.mod;
 
-import eu.pb4.common.economy.api.CommonEconomy;
 import net.fabricmc.api.ModInitializer;
 import savage.openeconomy.core.EconomyManager;
 import savage.openeconomy.integration.OpenEconomyProvider;
@@ -11,7 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class OpenEconomyMod implements ModInitializer {
-    public static final String MOD_ID = "open-economy-mod";
+    public static final String MOD_ID = "open-economy";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     @Override
@@ -23,10 +22,8 @@ public class OpenEconomyMod implements ModInitializer {
         EconomyConfig cfg = ConfigManager.getConfig();
 
         // 2. Inject the configuration into the Core Engine
+        // This will trigger the engine to initialize and register with the Economy API
         EconomyManager.setConfig(cfg);
-
-        // 3. Register with Common Economy API using the IDs from the engine (via config)
-        CommonEconomy.register(cfg.getProviderId(), OpenEconomyProvider.INSTANCE);
 
         LOGGER.info("OpenEconomy Implementation Mod initialized.");
     }

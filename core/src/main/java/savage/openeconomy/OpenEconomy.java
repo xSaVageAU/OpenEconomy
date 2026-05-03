@@ -15,7 +15,7 @@ import savage.openeconomy.messaging.MessagingRegistry;
 import savage.openeconomy.storage.StorageRegistry;
 
 public class OpenEconomy implements ModInitializer {
-    public static final String MOD_ID = "open-economy";
+    public static final String MOD_ID = "open-economy-core";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private static MinecraftServer server;

@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 1,
-	"id": "open-economy-mod",
+	"id": "open-economy",
 	"version": "${version}",
 	"name": "OpenEconomy",
 	"description": "Standard implementation of the OpenEconomy engine.",
@@ -18,6 +18,6 @@
 		"fabricloader": ">=0.18.5",
 		"minecraft": "~26.1",
 		"java": ">=25",
-		"open-economy": "*"
+		"open-economy-core": "*"
 	}
 }

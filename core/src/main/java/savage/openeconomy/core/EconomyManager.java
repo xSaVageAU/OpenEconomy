@@ -1,10 +1,12 @@
 package savage.openeconomy.core;
 
+import eu.pb4.common.economy.api.CommonEconomy;
 import savage.openeconomy.OpenEconomy;
 import savage.openeconomy.api.AccountData;
 import savage.openeconomy.core.EconomyCoreConfig;
 import savage.openeconomy.api.EconomyMessaging;
 import savage.openeconomy.api.EconomyStorage;
+import savage.openeconomy.integration.OpenEconomyProvider;
 import savage.openeconomy.storage.AsyncStorage;
 import savage.openeconomy.messaging.MessagingRegistry;
 import savage.openeconomy.storage.StorageRegistry;
@@ -58,6 +60,9 @@ public class EconomyManager {
         // Initialize messaging for cross-server cache sync
         this.messaging = MessagingRegistry.create(cfg.getMessagingType());
         OpenEconomy.LOGGER.info("Economy initialized with messaging: {}", cfg.getMessagingType());
+
+        // Register with Common Economy API using the IDs from the engine config
+        CommonEconomy.register(cfg.getProviderId(), OpenEconomyProvider.INSTANCE);
 
         // Load existing data into memory
         storage.loadAllAccounts().forEach((uuid, data) -> {

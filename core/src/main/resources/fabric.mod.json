@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 1,
-	"id": "open-economy",
+	"id": "open-economy-core",
 	"version": "${version}",
 	"name": "OpenEconomy",
 	"description": "A lightweight, modular, and extensible economy framework for Minecraft, fully integrated with the Common Economy API for maximum compatibility.",

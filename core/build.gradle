@@ -19,8 +19,5 @@ dependencies {
 	include(project(":addons:json"))
 
 	// Common Economy API
-	include(implementation("eu.pb4:common-economy-api:2.0.0"))
-
-	// YAML Config
-	include(implementation("org.yaml:snakeyaml:2.2"))
+	include(api("eu.pb4:common-economy-api:2.0.0"))
 }
