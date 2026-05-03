@@ -3,6 +3,7 @@ package savage.openeconomy.mod.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.fabricmc.loader.api.FabricLoader;
+import savage.openeconomy.mod.OpenEconomyMod;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -23,7 +24,7 @@ public class ConfigManager {
                     config = loaded;
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                OpenEconomyMod.LOGGER.error("Failed to load configuration!", e);
             }
         } else {
             save();
@@ -37,7 +38,7 @@ public class ConfigManager {
                 GSON.toJson(config, writer);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            OpenEconomyMod.LOGGER.error("Failed to save configuration!", e);
         }
     }
 
