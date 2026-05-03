@@ -21,9 +21,6 @@ dependencies {
 	// Common Economy API
 	include(implementation("eu.pb4:common-economy-api:2.0.0"))
 
-	// Permissions API
-	include(implementation("me.lucko:fabric-permissions-api:0.7.0"))
-
 	// YAML Config
 	include(implementation("org.yaml:snakeyaml:2.2"))
 }
