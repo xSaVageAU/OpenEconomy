@@ -74,7 +74,7 @@ public class AsyncStorage implements EconomyStorage {
     }
 
     @Override
-    public Map<UUID, AccountData> loadAllAccounts() {
+    public CompletableFuture<Map<UUID, AccountData>> loadAllAccounts() {
         return delegate.loadAllAccounts();
     }
 

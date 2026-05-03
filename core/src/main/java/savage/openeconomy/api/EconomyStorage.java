@@ -17,7 +17,7 @@ public interface EconomyStorage {
 
     CompletableFuture<Boolean> deleteAccount(UUID uuid);
 
-    Map<UUID, AccountData> loadAllAccounts();
+    CompletableFuture<Map<UUID, AccountData>> loadAllAccounts();
 
     void shutdown();
 }

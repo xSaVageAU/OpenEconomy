@@ -47,53 +47,73 @@ public class JsonEconomyStorage implements EconomyStorage {
 
     @Override
     public CompletableFuture<Boolean> saveAccount(UUID uuid, AccountData data) {
-        Path file = storageDir.resolve(uuid.toString() + ".json");
-        Path tempFile = storageDir.resolve(uuid.toString() + ".json.tmp");
+        return CompletableFuture.supplyAsync(() -> {
+            Path file = storageDir.resolve(uuid.toString() + ".json");
+            Path tempFile = storageDir.resolve(uuid.toString() + ".json.tmp");
 
-        try {
-            // Atomic save: write to .tmp then move
-            try (var writer = Files.newBufferedWriter(tempFile)) {
-                GSON.toJson(data, writer);
+            try {
+                // Optimistic Locking Check
+                if (Files.exists(file)) {
+                    try (var reader = Files.newBufferedReader(file)) {
+                        AccountData existing = GSON.fromJson(reader, AccountData.class);
+                        if (existing != null && existing.revision() != data.revision()) {
+                            OpenEconomy.LOGGER.warn("Revision mismatch for {}: expected {}, found {}", uuid, data.revision(), existing.revision());
+                            return false; // Collision!
+                        }
+                    }
+                }
+
+                // Increment revision for the new save
+                AccountData toSave = new AccountData(data.name(), data.balance(), data.revision() + 1);
+
+                // Atomic save: write to .tmp then move
+                try (var writer = Files.newBufferedWriter(tempFile)) {
+                    GSON.toJson(toSave, writer);
+                }
+                Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                return true;
+            } catch (IOException e) {
+                OpenEconomy.LOGGER.error("Failed to save account atomicly for {}: {}", uuid, e.getMessage());
+                return false;
             }
-            Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            return CompletableFuture.completedFuture(true);
-        } catch (IOException e) {
-            OpenEconomy.LOGGER.error("Failed to save account atomicly for {}: {}", uuid, e.getMessage());
-            return CompletableFuture.completedFuture(false);
-        }
+        });
     }
 
     @Override
     public CompletableFuture<Boolean> deleteAccount(UUID uuid) {
-        try {
-            Files.deleteIfExists(storageDir.resolve(uuid.toString() + ".json"));
-            return CompletableFuture.completedFuture(true);
-        } catch (IOException e) {
-            OpenEconomy.LOGGER.error("Failed to delete account {}: {}", uuid, e.getMessage());
-            return CompletableFuture.completedFuture(false);
-        }
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Files.deleteIfExists(storageDir.resolve(uuid.toString() + ".json"));
+                return true;
+            } catch (IOException e) {
+                OpenEconomy.LOGGER.error("Failed to delete account {}: {}", uuid, e.getMessage());
+                return false;
+            }
+        });
     }
 
     @Override
-    public Map<UUID, AccountData> loadAllAccounts() {
-        Map<UUID, AccountData> accounts = new HashMap<>();
-        if (!Files.exists(storageDir)) return accounts;
+    public CompletableFuture<Map<UUID, AccountData>> loadAllAccounts() {
+        return CompletableFuture.supplyAsync(() -> {
+            Map<UUID, AccountData> accounts = new HashMap<>();
+            if (!Files.exists(storageDir)) return accounts;
 
-        try (Stream<Path> files = Files.list(storageDir)) {
-            files.filter(f -> f.toString().endsWith(".json")).forEach(file -> {
-                try (var reader = Files.newBufferedReader(file)) {
-                    String fileName = file.getFileName().toString();
-                    UUID uuid = UUID.fromString(fileName.substring(0, fileName.length() - 5));
-                    AccountData data = GSON.fromJson(reader, AccountData.class);
-                    if (data != null) accounts.put(uuid, data);
-                } catch (Exception e) {
-                    OpenEconomy.LOGGER.error("Failed to load account file {}: {}", file, e.getMessage());
-                }
-            });
-        } catch (IOException e) {
-            OpenEconomy.LOGGER.error("Failed to list accounts directory: {}", storageDir, e);
-        }
-        return accounts;
+            try (Stream<Path> files = Files.list(storageDir)) {
+                files.filter(f -> f.toString().endsWith(".json")).forEach(file -> {
+                    try (var reader = Files.newBufferedReader(file)) {
+                        String fileName = file.getFileName().toString();
+                        UUID uuid = UUID.fromString(fileName.substring(0, fileName.length() - 5));
+                        AccountData data = GSON.fromJson(reader, AccountData.class);
+                        if (data != null) accounts.put(uuid, data);
+                    } catch (Exception e) {
+                        OpenEconomy.LOGGER.error("Failed to load account file {}: {}", file, e.getMessage());
+                    }
+                });
+            } catch (IOException e) {
+                OpenEconomy.LOGGER.error("Failed to list accounts directory: {}", storageDir, e);
+            }
+            return accounts;
+        });
     }
 
     @Override

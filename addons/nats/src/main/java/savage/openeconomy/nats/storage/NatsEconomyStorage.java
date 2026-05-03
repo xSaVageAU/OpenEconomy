@@ -111,33 +111,35 @@ public class NatsEconomyStorage implements EconomyStorage {
     }
 
     @Override
-    public Map<UUID, AccountData> loadAllAccounts() {
-        Map<UUID, AccountData> accounts = new HashMap<>();
-        try {
-            List<String> keys;
+    public CompletableFuture<Map<UUID, AccountData>> loadAllAccounts() {
+        return CompletableFuture.supplyAsync(() -> {
+            Map<UUID, AccountData> accounts = new HashMap<>();
             try {
-                keys = kv.keys();
-            } catch (io.nats.client.JetStreamApiException e) {
-                if (e.getErrorCode() == 404) return accounts; // Bucket empty
-                throw e;
-            }
-
-            for (String key : keys) {
+                List<String> keys;
                 try {
-                    UUID uuid = UUID.fromString(key);
-                    AccountData data = loadAccount(uuid).join();
-                    if (data != null) {
-                        accounts.put(uuid, data);
-                    }
-                } catch (IllegalArgumentException e) {
-                    LOGGER.warn("Skipping invalid KV key: {}", key);
+                    keys = kv.keys();
+                } catch (io.nats.client.JetStreamApiException e) {
+                    if (e.getErrorCode() == 404) return accounts; // Bucket empty
+                    throw e;
                 }
+
+                for (String key : keys) {
+                    try {
+                        UUID uuid = UUID.fromString(key);
+                        AccountData data = loadAccount(uuid).join();
+                        if (data != null) {
+                            accounts.put(uuid, data);
+                        }
+                    } catch (IllegalArgumentException e) {
+                        LOGGER.warn("Skipping invalid KV key: {}", key);
+                    }
+                }
+                LOGGER.info("Loaded {} accounts from NATS KV", accounts.size());
+            } catch (Exception e) {
+                LOGGER.error("Failed to load accounts from KV: {}", e.getMessage());
             }
-            LOGGER.info("Loaded {} accounts from NATS KV", accounts.size());
-        } catch (Exception e) {
-            LOGGER.error("Failed to load accounts from KV: {}", e.getMessage());
-        }
-        return accounts;
+            return accounts;
+        });
     }
 
     @Override

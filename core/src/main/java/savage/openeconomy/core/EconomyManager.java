@@ -68,11 +68,13 @@ public class EconomyManager {
         // Register with Common Economy API using the IDs from the engine config
         CommonEconomy.register(cfg.getProviderId(), OpenEconomyProvider.INSTANCE);
 
-        // Load existing data into memory
-        storage.loadAllAccounts().forEach((uuid, data) -> {
-            cache.put(uuid, data);
-            reverseCache.put(data.name().toLowerCase(), uuid);
-        });
+        // Load existing data into memory (blocking at startup is acceptable)
+        storage.loadAllAccounts().thenAccept(accounts -> {
+            accounts.forEach((uuid, data) -> {
+                cache.put(uuid, data);
+                reverseCache.put(data.name().toLowerCase(), uuid);
+            });
+        }).join();
 
         // Listen for external updates (e.g. from other servers via messaging)
         messaging.subscribe(update -> updateCacheInternally(update.uuid(), update.data()));
@@ -124,7 +126,7 @@ public class EconomyManager {
             return CompletableFuture.completedFuture(false);
 
         return ensureCachedAsync(from).thenCombine(ensureCachedAsync(to), (fromData, toData) -> {
-            if (fromData == null || toData == null) return false;
+            if (fromData == null || toData == null) return CompletableFuture.completedFuture(false);
 
             AccountData[] fromState = new AccountData[2];
             AccountData[] toState = new AccountData[2];
@@ -142,6 +144,7 @@ public class EconomyManager {
                     fromState[1] = new AccountData(f.name(), f.balance().subtract(amount), f.revision());
                     toState[1] = new AccountData(t.name(), t.balance().add(amount).min(MAX_BALANCE), t.revision());
 
+                    // Speculatively update cache
                     cache.put(from, fromState[1]);
                     cache.put(to, toState[1]);
                     success[0] = true;
@@ -150,16 +153,29 @@ public class EconomyManager {
 
             if (success[0]) {
                 // Async chain the saves
-                storage.saveAccount(from, fromState[1]).thenCompose(s1 -> 
-                    storage.saveAccount(to, toState[1])
-                ).thenAccept(s2 -> {
-                    publishAndNotify(from, fromState[0], fromState[1]);
-                    publishAndNotify(to, toState[0], toState[1]);
+                return storage.saveAccount(from, fromState[1]).thenCompose(s1 -> {
+                    if (!s1) {
+                        // Rollback cache if sender save failed (Optimistic Lock failure)
+                        cache.remove(from);
+                        return CompletableFuture.completedFuture(false);
+                    }
+                    return storage.saveAccount(to, toState[1]).thenApply(s2 -> {
+                        if (s2) {
+                            publishAndNotify(from, fromState[0], fromState[1]);
+                            publishAndNotify(to, toState[0], toState[1]);
+                            return true;
+                        } else {
+                            // Target save failed! This is a dangerous state.
+                            // Clear cache so it re-syncs from storage.
+                            cache.remove(to);
+                            return false;
+                        }
+                    });
                 });
             }
 
-            return success[0];
-        });
+            return CompletableFuture.completedFuture(false);
+        }).thenCompose(f -> f); // Flatten the nested future
     }
 
     private void withLocks(UUID uuid1, UUID uuid2, Runnable action) {
@@ -183,6 +199,11 @@ public class EconomyManager {
     }
 
     public CompletableFuture<Boolean> setBalance(UUID uuid, BigDecimal amount) {
+        return setBalance(uuid, amount, 0);
+    }
+
+    private CompletableFuture<Boolean> setBalance(UUID uuid, BigDecimal amount, int retry) {
+        if (retry > 5) return CompletableFuture.completedFuture(false);
         BigDecimal clamped = amount.max(BigDecimal.ZERO).min(MAX_BALANCE);
 
         return ensureCachedAsync(uuid).thenCompose(current -> {
@@ -190,7 +211,7 @@ public class EconomyManager {
 
             AccountData updated = new AccountData(current.name(), clamped, current.revision());
             
-            return storage.saveAccount(uuid, updated).thenApply(success -> {
+            return storage.saveAccount(uuid, updated).thenCompose(success -> {
                 if (success) {
                     Lock lock = locks.get(uuid);
                     lock.lock();
@@ -200,25 +221,29 @@ public class EconomyManager {
                         lock.unlock();
                     }
                     publishAndNotify(uuid, current, updated);
-                    return true;
+                    return CompletableFuture.completedFuture(true);
                 } else {
-                    // Collision! Someone else updated the data. Clear cache for next try.
+                    // Collision! Someone else updated the data. Clear cache and retry.
                     cache.remove(uuid);
-                    return false; // Let the caller/retry handle it
+                    return setBalance(uuid, amount, retry + 1);
                 }
             });
         });
     }
 
     public CompletableFuture<Boolean> addBalance(UUID uuid, BigDecimal amount) {
-        if (amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
+        return addBalance(uuid, amount, 0);
+    }
+
+    private CompletableFuture<Boolean> addBalance(UUID uuid, BigDecimal amount, int retry) {
+        if (retry > 5 || amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
 
         return ensureCachedAsync(uuid).thenCompose(current -> {
             if (current == null) return CompletableFuture.completedFuture(false);
 
             AccountData updated = new AccountData(current.name(), current.balance().add(amount).min(MAX_BALANCE), current.revision());
             
-            return storage.saveAccount(uuid, updated).thenApply(success -> {
+            return storage.saveAccount(uuid, updated).thenCompose(success -> {
                 if (success) {
                     Lock lock = locks.get(uuid);
                     lock.lock();
@@ -228,25 +253,29 @@ public class EconomyManager {
                         lock.unlock();
                     }
                     publishAndNotify(uuid, current, updated);
-                    return true;
+                    return CompletableFuture.completedFuture(true);
                 } else {
                     cache.remove(uuid);
-                    return false;
+                    return addBalance(uuid, amount, retry + 1);
                 }
             });
         });
     }
 
     public CompletableFuture<Boolean> removeBalance(UUID uuid, BigDecimal amount) {
-        if (amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
+        return removeBalance(uuid, amount, 0);
+    }
+
+    private CompletableFuture<Boolean> removeBalance(UUID uuid, BigDecimal amount, int retry) {
+        if (retry > 5 || amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
 
         return ensureCachedAsync(uuid).thenCompose(current -> {
-            if (current == null || current.balance().compareTo(amount) < 0) 
-                return CompletableFuture.completedFuture(false);
+            if (current == null) return CompletableFuture.completedFuture(false);
+            if (current.balance().compareTo(amount) < 0) return CompletableFuture.completedFuture(false);
 
             AccountData updated = new AccountData(current.name(), current.balance().subtract(amount), current.revision());
             
-            return storage.saveAccount(uuid, updated).thenApply(success -> {
+            return storage.saveAccount(uuid, updated).thenCompose(success -> {
                 if (success) {
                     Lock lock = locks.get(uuid);
                     lock.lock();
@@ -256,10 +285,10 @@ public class EconomyManager {
                         lock.unlock();
                     }
                     publishAndNotify(uuid, current, updated);
-                    return true;
+                    return CompletableFuture.completedFuture(true);
                 } else {
                     cache.remove(uuid);
-                    return false;
+                    return removeBalance(uuid, amount, retry + 1);
                 }
             });
         });
