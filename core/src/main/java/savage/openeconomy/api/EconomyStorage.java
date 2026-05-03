@@ -11,9 +11,9 @@ public interface EconomyStorage {
     
     AccountData loadAccount(UUID uuid);
 
-    void saveAccount(UUID uuid, AccountData data);
+    boolean saveAccount(UUID uuid, AccountData data);
 
-    void deleteAccount(UUID uuid);
+    boolean deleteAccount(UUID uuid);
 
     Map<UUID, AccountData> loadAllAccounts();
 

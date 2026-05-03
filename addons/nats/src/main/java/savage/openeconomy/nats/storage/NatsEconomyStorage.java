@@ -60,7 +60,9 @@ public class NatsEconomyStorage implements EconomyStorage {
         try {
             KeyValueEntry entry = kv.get(uuid.toString());
             if (entry == null) return null;
-            return deserialize(entry.getValueAsString());
+            AccountData data = deserialize(entry.getValueAsString());
+            // Store the NATS revision for optimistic locking
+            return new AccountData(data.name(), data.balance(), entry.getRevision());
         } catch (Exception e) {
             LOGGER.error("Failed to load account {} from KV: {}", uuid, e.getMessage());
             return null;
@@ -68,20 +70,42 @@ public class NatsEconomyStorage implements EconomyStorage {
     }
 
     @Override
-    public void saveAccount(UUID uuid, AccountData data) {
+    public boolean saveAccount(UUID uuid, AccountData data) {
         try {
-            kv.put(uuid.toString(), serialize(data));
+            byte[] value = serialize(data);
+            String key = uuid.toString();
+            
+            if (data.revision() <= 0) {
+                // New account: use create() which fails if the key already exists
+                try {
+                    kv.create(key, value);
+                    return true;
+                } catch (io.nats.client.JetStreamApiException e) {
+                    return false; // Key collision
+                }
+            } else {
+                // Existing account: use update() which fails if the sequence doesn't match
+                try {
+                    kv.update(key, value, data.revision());
+                    return true;
+                } catch (io.nats.client.JetStreamApiException e) {
+                    return false; // Revision mismatch (Optimistic Lock failure)
+                }
+            }
         } catch (Exception e) {
             LOGGER.error("Failed to save account {} to KV: {}", uuid, e.getMessage());
+            return false;
         }
     }
 
     @Override
-    public void deleteAccount(UUID uuid) {
+    public boolean deleteAccount(UUID uuid) {
         try {
             kv.delete(uuid.toString());
+            return true;
         } catch (Exception e) {
             LOGGER.error("Failed to delete account {} from KV: {}", uuid, e.getMessage());
+            return false;
         }
     }
 

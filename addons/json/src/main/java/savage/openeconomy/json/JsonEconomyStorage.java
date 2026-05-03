@@ -19,7 +19,7 @@ import java.util.stream.Stream;
  * Stores each account in a separate file for better scalability and atomic saves.
  */
 public class JsonEconomyStorage implements EconomyStorage {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder().create();
     private final Path storageDir;
 
     public JsonEconomyStorage() {
@@ -45,7 +45,7 @@ public class JsonEconomyStorage implements EconomyStorage {
     }
 
     @Override
-    public void saveAccount(UUID uuid, AccountData data) {
+    public boolean saveAccount(UUID uuid, AccountData data) {
         Path file = storageDir.resolve(uuid.toString() + ".json");
         Path tempFile = storageDir.resolve(uuid.toString() + ".json.tmp");
 
@@ -55,17 +55,21 @@ public class JsonEconomyStorage implements EconomyStorage {
                 GSON.toJson(data, writer);
             }
             Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            return true;
         } catch (IOException e) {
             OpenEconomy.LOGGER.error("Failed to save account atomicly for {}: {}", uuid, e.getMessage());
+            return false;
         }
     }
 
     @Override
-    public void deleteAccount(UUID uuid) {
+    public boolean deleteAccount(UUID uuid) {
         try {
             Files.deleteIfExists(storageDir.resolve(uuid.toString() + ".json"));
+            return true;
         } catch (IOException e) {
             OpenEconomy.LOGGER.error("Failed to delete account {}: {}", uuid, e.getMessage());
+            return false;
         }
     }
 
