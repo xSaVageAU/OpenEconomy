@@ -16,6 +16,13 @@ public interface EconomyCoreConfig {
     String getStorageType();
     String getMessagingType();
 
+    /**
+     * Whether the engine should automatically send balance update notifications (diff messages) to the player.
+     */
+    default boolean isDiffMessageEnabled(java.util.UUID uuid) {
+        return false;
+    }
+
     // Technical constants that shouldn't change
     default String getProviderId() { return "open_economy"; }
     default String getCurrencyId() { return "dollar"; }

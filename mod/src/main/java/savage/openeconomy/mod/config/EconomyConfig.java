@@ -12,8 +12,14 @@ public class EconomyConfig implements EconomyCoreConfig {
     public String storageType = "json";
     public String messagingType = "none";
     public int economyScale = 100;
+    public boolean enableDiffMessages = true;
 
     private transient BigDecimal cachedDefaultBalance;
+
+    @Override
+    public boolean isDiffMessageEnabled(java.util.UUID uuid) {
+        return enableDiffMessages;
+    }
 
     @Override
     public BigDecimal getDefaultBalance() {

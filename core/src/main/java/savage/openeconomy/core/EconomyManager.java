@@ -87,8 +87,10 @@ public class EconomyManager {
 
             // Notify the player if their balance actually changed
             if (oldData != null && newData.balance().compareTo(oldData.balance()) != 0) {
-                BigDecimal diff = newData.balance().subtract(oldData.balance());
-                EconomyMessages.sendBalanceUpdate(uuid, diff, newData.balance());
+                if (getConfig().isDiffMessageEnabled(uuid)) {
+                    BigDecimal diff = newData.balance().subtract(oldData.balance());
+                    EconomyMessages.sendBalanceUpdate(uuid, diff, newData.balance());
+                }
             }
             return newData;
         });
@@ -144,8 +146,12 @@ public class EconomyManager {
         storage.saveAccount(to, newTo);
 
         // Notify and Publish
-        EconomyMessages.sendBalanceUpdate(from, amount.negate(), newFrom.balance());
-        EconomyMessages.sendBalanceUpdate(to, amount, newTo.balance());
+        if (getConfig().isDiffMessageEnabled(from)) {
+            EconomyMessages.sendBalanceUpdate(from, amount.negate(), newFrom.balance());
+        }
+        if (getConfig().isDiffMessageEnabled(to)) {
+            EconomyMessages.sendBalanceUpdate(to, amount, newTo.balance());
+        }
         messaging.publish(from, newFrom);
         messaging.publish(to, newTo);
 
@@ -165,8 +171,11 @@ public class EconomyManager {
             }
             AccountData updated = new AccountData(current.name(), clamped);
             storage.saveAccount(uuid, updated);
-            BigDecimal diff = updated.balance().subtract(current.balance());
-            EconomyMessages.sendBalanceUpdate(uuid, diff, updated.balance());
+            
+            if (getConfig().isDiffMessageEnabled(uuid)) {
+                BigDecimal diff = updated.balance().subtract(current.balance());
+                EconomyMessages.sendBalanceUpdate(uuid, diff, updated.balance());
+            }
             
             messaging.publish(uuid, updated);
             success[0] = true;
@@ -189,8 +198,10 @@ public class EconomyManager {
             AccountData updated = new AccountData(current.name(), newBal);
             storage.saveAccount(uuid, updated);
 
-            BigDecimal diff = updated.balance().subtract(current.balance());
-            EconomyMessages.sendBalanceUpdate(uuid, diff, updated.balance());
+            if (getConfig().isDiffMessageEnabled(uuid)) {
+                BigDecimal diff = updated.balance().subtract(current.balance());
+                EconomyMessages.sendBalanceUpdate(uuid, diff, updated.balance());
+            }
 
             messaging.publish(uuid, updated);
             success[0] = true;
@@ -213,8 +224,10 @@ public class EconomyManager {
             AccountData updated = new AccountData(current.name(), current.balance().subtract(amount));
             storage.saveAccount(uuid, updated);
 
-            BigDecimal diff = updated.balance().subtract(current.balance());
-            EconomyMessages.sendBalanceUpdate(uuid, diff, updated.balance());
+            if (getConfig().isDiffMessageEnabled(uuid)) {
+                BigDecimal diff = updated.balance().subtract(current.balance());
+                EconomyMessages.sendBalanceUpdate(uuid, diff, updated.balance());
+            }
 
             messaging.publish(uuid, updated);
             success[0] = true;
