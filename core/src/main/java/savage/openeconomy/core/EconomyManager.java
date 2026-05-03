@@ -148,101 +148,72 @@ public class EconomyManager {
         AccountData newFrom = new AccountData(fromData.name(), fromData.balance().subtract(amount));
         AccountData newTo = new AccountData(toData.name(), toData.balance().add(amount).min(MAX_BALANCE));
 
-        // Save and Cache
+        // Cache
         cache.put(from, newFrom);
         cache.put(to, newTo);
-        storage.saveAccount(from, newFrom);
-        storage.saveAccount(to, newTo);
 
-        // Notify and Publish
-        if (getConfig().isDiffMessageEnabled(from)) {
-            EconomyMessages.sendBalanceUpdate(from, amount.negate(), newFrom.balance());
-        }
-        if (getConfig().isDiffMessageEnabled(to)) {
-            EconomyMessages.sendBalanceUpdate(to, amount, newTo.balance());
-        }
-        messaging.publish(from, newFrom);
-        messaging.publish(to, newTo);
+        // Commit & Publish
+        commitAndPublish(from, fromData, newFrom);
+        commitAndPublish(to, toData, newTo);
 
         return true;
     }
 
     public boolean setBalance(UUID uuid, BigDecimal amount) {
         BigDecimal clamped = amount.max(BigDecimal.ZERO).min(MAX_BALANCE);
-
-        // Ensure account is loaded outside the lock
         if (ensureCached(uuid) == null) return false;
 
-        final boolean[] success = {false};
+        AccountData[] state = new AccountData[2]; // [0] = old, [1] = new
         cache.compute(uuid, (key, current) -> {
-            if (current == null) {
-                return null;
-            }
-            AccountData updated = new AccountData(current.name(), clamped);
-            storage.saveAccount(uuid, updated);
-            
-            if (getConfig().isDiffMessageEnabled(uuid)) {
-                BigDecimal diff = updated.balance().subtract(current.balance());
-                EconomyMessages.sendBalanceUpdate(uuid, diff, updated.balance());
-            }
-            
-            messaging.publish(uuid, updated);
-            success[0] = true;
-            return updated;
+            if (current == null) return null;
+            state[0] = current;
+            state[1] = new AccountData(current.name(), clamped);
+            return state[1];
         });
-        return success[0];
+
+        if (state[1] != null) {
+            commitAndPublish(uuid, state[0], state[1]);
+            return true;
+        }
+        return false;
     }
 
     public boolean addBalance(UUID uuid, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
-        
-        // Ensure account is loaded outside the lock
         if (ensureCached(uuid) == null) return false;
 
-        final boolean[] success = {false};
+        AccountData[] state = new AccountData[2];
         cache.compute(uuid, (key, current) -> {
             if (current == null) return null;
-            
-            BigDecimal newBal = current.balance().add(amount).min(MAX_BALANCE);
-            AccountData updated = new AccountData(current.name(), newBal);
-            storage.saveAccount(uuid, updated);
-
-            if (getConfig().isDiffMessageEnabled(uuid)) {
-                BigDecimal diff = updated.balance().subtract(current.balance());
-                EconomyMessages.sendBalanceUpdate(uuid, diff, updated.balance());
-            }
-
-            messaging.publish(uuid, updated);
-            success[0] = true;
-            return updated;
+            state[0] = current;
+            state[1] = new AccountData(current.name(), current.balance().add(amount).min(MAX_BALANCE));
+            return state[1];
         });
-        return success[0];
+
+        if (state[1] != null) {
+            commitAndPublish(uuid, state[0], state[1]);
+            return true;
+        }
+        return false;
     }
 
     public boolean removeBalance(UUID uuid, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
-
-        // Ensure account is loaded outside the lock
         if (ensureCached(uuid) == null) return false;
 
-        final boolean[] success = {false};
+        AccountData[] state = new AccountData[2];
         cache.compute(uuid, (key, current) -> {
-            if (current == null || current.balance().compareTo(amount) < 0) {
-                return current;
-            }
-            AccountData updated = new AccountData(current.name(), current.balance().subtract(amount));
-            storage.saveAccount(uuid, updated);
-
-            if (getConfig().isDiffMessageEnabled(uuid)) {
-                BigDecimal diff = updated.balance().subtract(current.balance());
-                EconomyMessages.sendBalanceUpdate(uuid, diff, updated.balance());
-            }
-
-            messaging.publish(uuid, updated);
-            success[0] = true;
-            return updated;
+            if (current == null || current.balance().compareTo(amount) < 0) return current;
+            state[0] = current;
+            state[1] = new AccountData(current.name(), current.balance().subtract(amount));
+            return state[1];
         });
-        return success[0];
+
+        if (state[1] != null) {
+            commitAndPublish(uuid, state[0], state[1]);
+            return true;
+        }
+        return false;
     }
 
     private AccountData ensureCached(UUID uuid) {
@@ -258,15 +229,15 @@ public class EconomyManager {
     }
 
     public AccountData getOrCreateAccount(UUID uuid, String name) {
-        return cache.compute(uuid, (key, existing) -> {
+        AccountData[] state = new AccountData[2]; // [0] = old, [1] = new
+        AccountData result = cache.compute(uuid, (key, existing) -> {
             if (existing != null) {
                 if (name != null && !name.equalsIgnoreCase(existing.name())) {
                     reverseCache.remove(existing.name().toLowerCase());
-                    AccountData updated = new AccountData(name, existing.balance());
+                    state[0] = existing;
+                    state[1] = new AccountData(name, existing.balance());
                     reverseCache.put(name.toLowerCase(), uuid);
-                    storage.saveAccount(uuid, updated);
-                    messaging.publish(uuid, updated);
-                    return updated;
+                    return state[1];
                 }
                 return existing;
             }
@@ -276,10 +247,14 @@ public class EconomyManager {
                 loaded = new AccountData(name, getConfig().getDefaultBalance());
             }
             if (name != null) reverseCache.put(name.toLowerCase(), uuid);
-            storage.saveAccount(uuid, loaded);
-            messaging.publish(uuid, loaded);
+            state[1] = loaded;
             return loaded;
         });
+
+        if (state[1] != null) {
+            commitAndPublish(uuid, state[0], state[1]);
+        }
+        return result;
     }
 
     public void resetBalance(UUID uuid) {
