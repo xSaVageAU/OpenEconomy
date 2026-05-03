@@ -28,12 +28,8 @@ public class EconomyMessages {
         String diffPrefix = isPositive ? "+" : "";
 
         Component message = Component.empty()
-                .append(Component.literal("[").withStyle(ChatFormatting.GRAY))
-                .append(Component.literal("Economy").withStyle(ChatFormatting.GOLD))
-                .append(Component.literal("] ").withStyle(ChatFormatting.GRAY))
-                .append(Component.literal("Your balance updated: ").withStyle(ChatFormatting.GRAY))
                 .append(Component.literal(diffPrefix + CurrencyFormatter.format(diff.abs())).withStyle(diffColor))
-                .append(Component.literal(" (New: ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(" (").withStyle(ChatFormatting.GRAY))
                 .append(Component.literal(CurrencyFormatter.format(newBalance)).withStyle(ChatFormatting.YELLOW))
                 .append(Component.literal(")").withStyle(ChatFormatting.GRAY));
 
