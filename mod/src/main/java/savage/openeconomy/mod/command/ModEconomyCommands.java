@@ -57,17 +57,12 @@ public class ModEconomyCommands {
                         return 0;
                     }
 
-                    var economy = EconomyManager.getInstance();
-                    var senderBalance = economy.getBalance(sender.getUUID());
+                    boolean success = EconomyManager.getInstance().transfer(sender.getUUID(), target.getUUID(), amount);
 
-                    if (senderBalance.compareTo(amount) < 0) {
-                        source.sendFailure(Component.literal("Insufficient funds!").withStyle(ChatFormatting.RED));
+                    if (!success) {
+                        source.sendFailure(Component.literal("Transaction failed! (Check your balance)").withStyle(ChatFormatting.RED));
                         return 0;
                     }
-
-                    // Perform transaction
-                    economy.removeBalance(sender.getUUID(), amount);
-                    economy.addBalance(target.getUUID(), amount);
 
                     // Notify
                     source.sendSuccess(() -> ModMessages.paySent(target.getGameProfile().name(), amount), false);

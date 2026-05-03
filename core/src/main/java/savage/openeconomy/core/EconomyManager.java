@@ -41,10 +41,13 @@ public class EconomyManager {
 
     private final Map<UUID, AccountData> cache = new ConcurrentHashMap<>();
     private final Map<String, UUID> reverseCache = new ConcurrentHashMap<>();
+    private final Object[] locks = new Object[1024];
     private EconomyStorage storage;
     private EconomyMessaging messaging;
 
-    private EconomyManager() {}
+    private EconomyManager() {
+        for (int i = 0; i < locks.length; i++) locks[i] = new Object();
+    }
 
     public static EconomyManager getInstance() {
         return INSTANCE;
@@ -94,6 +97,59 @@ public class EconomyManager {
     public BigDecimal getBalance(UUID uuid) {
         AccountData data = cache.get(uuid);
         return data != null ? data.balance() : getConfig().getDefaultBalance();
+    }
+
+    public boolean transfer(UUID from, UUID to, BigDecimal amount) {
+        if (from.equals(to) || amount.compareTo(BigDecimal.ZERO) <= 0) return false;
+
+        // Ensure both cached outside the lock
+        if (ensureCached(from) == null || ensureCached(to) == null) return false;
+
+        // Order the locks to prevent deadlocks
+        Object lock1 = locks[Math.abs(from.hashCode() % locks.length)];
+        Object lock2 = locks[Math.abs(to.hashCode() % locks.length)];
+        Object first = from.compareTo(to) < 0 ? lock1 : lock2;
+        Object second = first == lock1 ? lock2 : lock1;
+
+        // If both UUIDs map to the same lock, we only synchronize once
+        if (first == second) {
+            synchronized (first) {
+                return executeTransfer(from, to, amount);
+            }
+        } else {
+            synchronized (first) {
+                synchronized (second) {
+                    return executeTransfer(from, to, amount);
+                }
+            }
+        }
+    }
+
+    private boolean executeTransfer(UUID from, UUID to, BigDecimal amount) {
+        AccountData fromData = cache.get(from);
+        AccountData toData = cache.get(to);
+
+        if (fromData == null || toData == null || fromData.balance().compareTo(amount) < 0) {
+            return false;
+        }
+
+        // Apply math
+        AccountData newFrom = new AccountData(fromData.name(), fromData.balance().subtract(amount));
+        AccountData newTo = new AccountData(toData.name(), toData.balance().add(amount).min(MAX_BALANCE));
+
+        // Save and Cache
+        cache.put(from, newFrom);
+        cache.put(to, newTo);
+        storage.saveAccount(from, newFrom);
+        storage.saveAccount(to, newTo);
+
+        // Notify and Publish
+        EconomyMessages.sendBalanceUpdate(from, amount.negate(), newFrom.balance());
+        EconomyMessages.sendBalanceUpdate(to, amount, newTo.balance());
+        messaging.publish(from, newFrom);
+        messaging.publish(to, newTo);
+
+        return true;
     }
 
     public boolean setBalance(UUID uuid, BigDecimal amount) {
