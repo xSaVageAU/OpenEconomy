@@ -30,13 +30,21 @@ public class AsyncStorage implements EconomyStorage {
     public void saveAccount(UUID uuid, AccountData data) {
         pendingSaves.compute(uuid, (id, existing) -> {
             Runnable task = () -> delegate.saveAccount(uuid, data);
-            CompletableFuture<Void> next = (existing == null || existing.isDone())
+            
+            CompletableFuture<Void> baseFuture = (existing == null || existing.isDone())
                     ? CompletableFuture.runAsync(task, ioExecutor)
                     : existing.thenRunAsync(task, ioExecutor);
-            return next.exceptionally(ex -> {
+
+            // Create the final future that handles exceptions
+            CompletableFuture<Void> finalFuture = baseFuture.exceptionally(ex -> {
                 OpenEconomy.LOGGER.error("Async save failed for {}: {}", uuid, ex.getMessage());
                 return null;
             });
+
+            // Use the finalFuture reference for the cleanup check
+            finalFuture.whenComplete((v, ex) -> pendingSaves.remove(uuid, finalFuture));
+
+            return finalFuture;
         });
     }
 
@@ -44,13 +52,21 @@ public class AsyncStorage implements EconomyStorage {
     public void deleteAccount(UUID uuid) {
         pendingSaves.compute(uuid, (id, existing) -> {
             Runnable task = () -> delegate.deleteAccount(uuid);
-            CompletableFuture<Void> next = (existing == null || existing.isDone())
+            
+            CompletableFuture<Void> baseFuture = (existing == null || existing.isDone())
                     ? CompletableFuture.runAsync(task, ioExecutor)
                     : existing.thenRunAsync(task, ioExecutor);
-            return next.exceptionally(ex -> {
+
+            // Create the final future that handles exceptions
+            CompletableFuture<Void> finalFuture = baseFuture.exceptionally(ex -> {
                 OpenEconomy.LOGGER.error("Async delete failed for {}: {}", uuid, ex.getMessage());
                 return null;
             });
+
+            // Use the finalFuture reference for the cleanup check
+            finalFuture.whenComplete((v, ex) -> pendingSaves.remove(uuid, finalFuture));
+
+            return finalFuture;
         });
     }
 

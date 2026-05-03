@@ -12,6 +12,8 @@ import savage.openeconomy.messaging.MessagingRegistry;
 import savage.openeconomy.storage.StorageRegistry;
 import savage.openeconomy.util.EconomyMessages;
 
+import com.google.common.util.concurrent.Striped;
+import java.util.concurrent.locks.Lock;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -41,12 +43,11 @@ public class EconomyManager {
 
     private final Map<UUID, AccountData> cache = new ConcurrentHashMap<>();
     private final Map<String, UUID> reverseCache = new ConcurrentHashMap<>();
-    private final Object[] locks = new Object[1024];
+    private final Striped<Lock> locks = Striped.lazyWeakLock(2048);
     private EconomyStorage storage;
     private EconomyMessaging messaging;
 
     private EconomyManager() {
-        for (int i = 0; i < locks.length; i++) locks[i] = new Object();
     }
 
     public static EconomyManager getInstance() {
@@ -78,22 +79,30 @@ public class EconomyManager {
     }
 
     private void updateCacheInternally(UUID uuid, AccountData newData) {
-        cache.compute(uuid, (key, oldData) -> {
+        AccountData oldData;
+        Lock lock = locks.get(uuid);
+        lock.lock();
+        try {
+            oldData = cache.get(uuid);
+            
             // Clean up stale reverse-cache entry if name changed
             if (oldData != null && !oldData.name().equalsIgnoreCase(newData.name())) {
                 reverseCache.remove(oldData.name().toLowerCase());
             }
             reverseCache.put(newData.name().toLowerCase(), uuid);
+            
+            cache.put(uuid, newData);
+        } finally {
+            lock.unlock();
+        }
 
-            // Notify the player if their balance actually changed
-            if (oldData != null && newData.balance().compareTo(oldData.balance()) != 0) {
-                if (getConfig().isDiffMessageEnabled(uuid)) {
-                    BigDecimal diff = newData.balance().subtract(oldData.balance());
-                    EconomyMessages.sendBalanceUpdate(uuid, diff, newData.balance());
-                }
+        // Notify the player outside the lock if their balance actually changed
+        if (oldData != null && newData.balance().compareTo(oldData.balance()) != 0) {
+            if (getConfig().isDiffMessageEnabled(uuid)) {
+                BigDecimal diff = newData.balance().subtract(oldData.balance());
+                EconomyMessages.sendBalanceUpdate(uuid, diff, newData.balance());
             }
-            return newData;
-        });
+        }
     }
 
     public BigDecimal getBalance(UUID uuid) {
@@ -116,47 +125,58 @@ public class EconomyManager {
         // Ensure both cached outside the lock
         if (ensureCached(from) == null || ensureCached(to) == null) return false;
 
-        // Order the locks to prevent deadlocks
-        Object lock1 = locks[Math.abs(from.hashCode() % locks.length)];
-        Object lock2 = locks[Math.abs(to.hashCode() % locks.length)];
-        Object first = from.compareTo(to) < 0 ? lock1 : lock2;
-        Object second = first == lock1 ? lock2 : lock1;
+        AccountData[] fromState = new AccountData[2];
+        AccountData[] toState = new AccountData[2];
+        boolean[] success = {false};
 
-        // If both UUIDs map to the same lock, we only synchronize once
-        if (first == second) {
-            synchronized (first) {
-                return executeTransfer(from, to, amount);
+        // Order the locks to prevent deadlocks
+        withLocks(from, to, () -> {
+            AccountData fromData = cache.get(from);
+            AccountData toData = cache.get(to);
+
+            if (fromData != null && toData != null && fromData.balance().compareTo(amount) >= 0) {
+                fromState[0] = fromData;
+                toState[0] = toData;
+
+                // Apply math
+                fromState[1] = new AccountData(fromData.name(), fromData.balance().subtract(amount));
+                toState[1] = new AccountData(toData.name(), toData.balance().add(amount).min(MAX_BALANCE));
+
+                // Cache
+                cache.put(from, fromState[1]);
+                cache.put(to, toState[1]);
+                success[0] = true;
             }
-        } else {
-            synchronized (first) {
-                synchronized (second) {
-                    return executeTransfer(from, to, amount);
-                }
-            }
+        });
+
+        // Do the heavy I/O outside the locks
+        if (success[0]) {
+            commitAndPublish(from, fromState[0], fromState[1]);
+            commitAndPublish(to, toState[0], toState[1]);
         }
+
+        return success[0];
     }
 
-    private boolean executeTransfer(UUID from, UUID to, BigDecimal amount) {
-        AccountData fromData = cache.get(from);
-        AccountData toData = cache.get(to);
+    private void withLocks(UUID uuid1, UUID uuid2, Runnable action) {
+        Lock lock1 = locks.get(uuid1);
+        Lock lock2 = locks.get(uuid2);
 
-        if (fromData == null || toData == null || fromData.balance().compareTo(amount) < 0) {
-            return false;
+        // Always lock in a consistent order to prevent deadlocks
+        Lock first = uuid1.compareTo(uuid2) < 0 ? lock1 : lock2;
+        Lock second = first == lock1 ? lock2 : lock1;
+
+        first.lock();
+        try {
+            if (first != second) second.lock();
+            try {
+                action.run();
+            } finally {
+                if (first != second) second.unlock();
+            }
+        } finally {
+            first.unlock();
         }
-
-        // Apply math
-        AccountData newFrom = new AccountData(fromData.name(), fromData.balance().subtract(amount));
-        AccountData newTo = new AccountData(toData.name(), toData.balance().add(amount).min(MAX_BALANCE));
-
-        // Cache
-        cache.put(from, newFrom);
-        cache.put(to, newTo);
-
-        // Commit & Publish
-        commitAndPublish(from, fromData, newFrom);
-        commitAndPublish(to, toData, newTo);
-
-        return true;
     }
 
     public boolean setBalance(UUID uuid, BigDecimal amount) {
@@ -164,12 +184,17 @@ public class EconomyManager {
         if (ensureCached(uuid) == null) return false;
 
         AccountData[] state = new AccountData[2]; // [0] = old, [1] = new
-        cache.compute(uuid, (key, current) -> {
-            if (current == null) return null;
+        Lock lock = locks.get(uuid);
+        lock.lock();
+        try {
+            AccountData current = cache.get(uuid);
+            if (current == null) return false;
             state[0] = current;
             state[1] = new AccountData(current.name(), clamped);
-            return state[1];
-        });
+            cache.put(uuid, state[1]);
+        } finally {
+            lock.unlock();
+        }
 
         if (state[1] != null) {
             commitAndPublish(uuid, state[0], state[1]);
@@ -183,12 +208,17 @@ public class EconomyManager {
         if (ensureCached(uuid) == null) return false;
 
         AccountData[] state = new AccountData[2];
-        cache.compute(uuid, (key, current) -> {
-            if (current == null) return null;
+        Lock lock = locks.get(uuid);
+        lock.lock();
+        try {
+            AccountData current = cache.get(uuid);
+            if (current == null) return false;
             state[0] = current;
             state[1] = new AccountData(current.name(), current.balance().add(amount).min(MAX_BALANCE));
-            return state[1];
-        });
+            cache.put(uuid, state[1]);
+        } finally {
+            lock.unlock();
+        }
 
         if (state[1] != null) {
             commitAndPublish(uuid, state[0], state[1]);
@@ -202,12 +232,17 @@ public class EconomyManager {
         if (ensureCached(uuid) == null) return false;
 
         AccountData[] state = new AccountData[2];
-        cache.compute(uuid, (key, current) -> {
-            if (current == null || current.balance().compareTo(amount) < 0) return current;
+        Lock lock = locks.get(uuid);
+        lock.lock();
+        try {
+            AccountData current = cache.get(uuid);
+            if (current == null || current.balance().compareTo(amount) < 0) return false;
             state[0] = current;
             state[1] = new AccountData(current.name(), current.balance().subtract(amount));
-            return state[1];
-        });
+            cache.put(uuid, state[1]);
+        } finally {
+            lock.unlock();
+        }
 
         if (state[1] != null) {
             commitAndPublish(uuid, state[0], state[1]);
@@ -230,26 +265,36 @@ public class EconomyManager {
 
     public AccountData getOrCreateAccount(UUID uuid, String name) {
         AccountData[] state = new AccountData[2]; // [0] = old, [1] = new
-        AccountData result = cache.compute(uuid, (key, existing) -> {
+        AccountData result;
+        
+        Lock lock = locks.get(uuid);
+        lock.lock();
+        try {
+            AccountData existing = cache.get(uuid);
             if (existing != null) {
                 if (name != null && !name.equalsIgnoreCase(existing.name())) {
                     reverseCache.remove(existing.name().toLowerCase());
                     state[0] = existing;
                     state[1] = new AccountData(name, existing.balance());
                     reverseCache.put(name.toLowerCase(), uuid);
-                    return state[1];
+                    cache.put(uuid, state[1]);
+                    result = state[1];
+                } else {
+                    result = existing;
                 }
-                return existing;
+            } else {
+                AccountData loaded = storage.loadAccount(uuid);
+                if (loaded == null) {
+                    loaded = new AccountData(name, getConfig().getDefaultBalance());
+                }
+                if (name != null) reverseCache.put(name.toLowerCase(), uuid);
+                state[1] = loaded;
+                cache.put(uuid, loaded);
+                result = loaded;
             }
-
-            AccountData loaded = storage.loadAccount(uuid);
-            if (loaded == null) {
-                loaded = new AccountData(name, getConfig().getDefaultBalance());
-            }
-            if (name != null) reverseCache.put(name.toLowerCase(), uuid);
-            state[1] = loaded;
-            return loaded;
-        });
+        } finally {
+            lock.unlock();
+        }
 
         if (state[1] != null) {
             commitAndPublish(uuid, state[0], state[1]);
