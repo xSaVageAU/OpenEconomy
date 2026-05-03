@@ -22,63 +22,55 @@ public class AsyncStorage implements EconomyStorage {
     }
 
     @Override
-    public AccountData loadAccount(UUID uuid) {
-        return delegate.loadAccount(uuid);
+    public CompletableFuture<AccountData> loadAccount(UUID uuid) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return delegate.loadAccount(uuid).join();
+            } catch (Exception e) {
+                OpenEconomy.LOGGER.error("Async load failed for {}: {}", uuid, e.getMessage());
+                return null;
+            }
+        }, ioExecutor);
     }
 
     @Override
-    public boolean saveAccount(UUID uuid, AccountData data) {
-        CompletableFuture<Boolean> finalFuture = pendingSaves.compute(uuid, (id, existing) -> {
-            // Task now returns a Boolean
-            Callable<Boolean> task = () -> delegate.saveAccount(uuid, data);
-            
-            CompletableFuture<Boolean> baseFuture = (existing == null || existing.isDone())
+    public CompletableFuture<Boolean> saveAccount(UUID uuid, AccountData data) {
+        return pendingSaves.compute(uuid, (id, existing) -> {
+            CompletableFuture<Boolean> next = (existing == null || existing.isDone())
                     ? CompletableFuture.supplyAsync(() -> {
-                        try { return task.call(); } catch (Exception e) { throw new CompletionException(e); }
+                        try { return delegate.saveAccount(uuid, data).join(); } catch (Exception e) { return false; }
                     }, ioExecutor)
-                    : existing.thenApplyAsync(v -> {
-                        try { return task.call(); } catch (Exception e) { throw new CompletionException(e); }
+                    : existing.handleAsync((v, ex) -> {
+                        try { return delegate.saveAccount(uuid, data).join(); } catch (Exception e) { return false; }
                     }, ioExecutor);
 
-            // Use the baseFuture for cleanup but handle exceptions
-            baseFuture.whenComplete((v, ex) -> pendingSaves.remove(uuid, baseFuture));
-
-            return baseFuture.exceptionally(ex -> {
-                OpenEconomy.LOGGER.error("Async save failed for {}: {}", uuid, ex.getMessage());
-                return false;
+            next.whenComplete((v, ex) -> {
+                if (ex != null) OpenEconomy.LOGGER.error("Async save failed for {}: {}", uuid, ex.getMessage());
+                pendingSaves.remove(uuid, next);
             });
-        });
 
-        // Block until this specific save (and its predecessors) are done
-        return finalFuture.join();
+            return next;
+        });
     }
 
     @Override
-    public boolean deleteAccount(UUID uuid) {
-        CompletableFuture<Boolean> finalFuture = pendingSaves.compute(uuid, (id, existing) -> {
-            Callable<Boolean> task = () -> {
-                delegate.deleteAccount(uuid);
-                return true;
-            };
-            
-            CompletableFuture<Boolean> baseFuture = (existing == null || existing.isDone())
+    public CompletableFuture<Boolean> deleteAccount(UUID uuid) {
+        return pendingSaves.compute(uuid, (id, existing) -> {
+            CompletableFuture<Boolean> next = (existing == null || existing.isDone())
                     ? CompletableFuture.supplyAsync(() -> {
-                        try { return task.call(); } catch (Exception e) { throw new CompletionException(e); }
+                        try { return delegate.deleteAccount(uuid).join(); } catch (Exception e) { return false; }
                     }, ioExecutor)
-                    : existing.thenApplyAsync(v -> {
-                        try { return task.call(); } catch (Exception e) { throw new CompletionException(e); }
+                    : existing.handleAsync((v, ex) -> {
+                        try { return delegate.deleteAccount(uuid).join(); } catch (Exception e) { return false; }
                     }, ioExecutor);
 
-            // Use the baseFuture reference for the cleanup check
-            baseFuture.whenComplete((v, ex) -> pendingSaves.remove(uuid, baseFuture));
-
-            return baseFuture.exceptionally(ex -> {
-                OpenEconomy.LOGGER.error("Async delete failed for {}: {}", uuid, ex.getMessage());
-                return false;
+            next.whenComplete((v, ex) -> {
+                if (ex != null) OpenEconomy.LOGGER.error("Async delete failed for {}: {}", uuid, ex.getMessage());
+                pendingSaves.remove(uuid, next);
             });
-        });
 
-        return finalFuture.join();
+            return next;
+        });
     }
 
     @Override

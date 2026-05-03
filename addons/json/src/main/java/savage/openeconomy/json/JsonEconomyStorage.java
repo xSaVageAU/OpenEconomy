@@ -2,6 +2,7 @@ package savage.openeconomy.json;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import java.util.concurrent.CompletableFuture;
 import net.fabricmc.loader.api.FabricLoader;
 import savage.openeconomy.OpenEconomy;
 import savage.openeconomy.api.AccountData;
@@ -32,20 +33,20 @@ public class JsonEconomyStorage implements EconomyStorage {
     }
 
     @Override
-    public AccountData loadAccount(UUID uuid) {
+    public CompletableFuture<AccountData> loadAccount(UUID uuid) {
         Path file = storageDir.resolve(uuid.toString() + ".json");
-        if (!Files.exists(file)) return null;
+        if (!Files.exists(file)) return CompletableFuture.completedFuture(null);
 
         try (var reader = Files.newBufferedReader(file)) {
-            return GSON.fromJson(reader, AccountData.class);
+            return CompletableFuture.completedFuture(GSON.fromJson(reader, AccountData.class));
         } catch (IOException e) {
             OpenEconomy.LOGGER.error("Failed to load account {}: {}", uuid, e.getMessage());
-            return null;
+            return CompletableFuture.completedFuture(null);
         }
     }
 
     @Override
-    public boolean saveAccount(UUID uuid, AccountData data) {
+    public CompletableFuture<Boolean> saveAccount(UUID uuid, AccountData data) {
         Path file = storageDir.resolve(uuid.toString() + ".json");
         Path tempFile = storageDir.resolve(uuid.toString() + ".json.tmp");
 
@@ -55,21 +56,21 @@ public class JsonEconomyStorage implements EconomyStorage {
                 GSON.toJson(data, writer);
             }
             Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            return true;
+            return CompletableFuture.completedFuture(true);
         } catch (IOException e) {
             OpenEconomy.LOGGER.error("Failed to save account atomicly for {}: {}", uuid, e.getMessage());
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
     }
 
     @Override
-    public boolean deleteAccount(UUID uuid) {
+    public CompletableFuture<Boolean> deleteAccount(UUID uuid) {
         try {
             Files.deleteIfExists(storageDir.resolve(uuid.toString() + ".json"));
-            return true;
+            return CompletableFuture.completedFuture(true);
         } catch (IOException e) {
             OpenEconomy.LOGGER.error("Failed to delete account {}: {}", uuid, e.getMessage());
-            return false;
+            return CompletableFuture.completedFuture(false);
         }
     }
 

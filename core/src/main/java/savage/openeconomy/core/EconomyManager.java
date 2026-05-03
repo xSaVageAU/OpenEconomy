@@ -3,7 +3,6 @@ package savage.openeconomy.core;
 import eu.pb4.common.economy.api.CommonEconomy;
 import savage.openeconomy.OpenEconomy;
 import savage.openeconomy.api.AccountData;
-import savage.openeconomy.core.EconomyCoreConfig;
 import savage.openeconomy.api.EconomyMessaging;
 import savage.openeconomy.api.EconomyStorage;
 import savage.openeconomy.integration.OpenEconomyProvider;
@@ -18,6 +17,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -119,52 +119,53 @@ public class EconomyManager {
         return reverseCache.keySet();
     }
 
-    public boolean transfer(UUID from, UUID to, BigDecimal amount) {
-        if (from.equals(to) || amount.compareTo(BigDecimal.ZERO) <= 0) return false;
+    public CompletableFuture<Boolean> transfer(UUID from, UUID to, BigDecimal amount) {
+        if (from.equals(to) || amount.compareTo(BigDecimal.ZERO) <= 0) 
+            return CompletableFuture.completedFuture(false);
 
-        // Ensure both cached outside the lock
-        if (ensureCached(from) == null || ensureCached(to) == null) return false;
+        return ensureCachedAsync(from).thenCombine(ensureCachedAsync(to), (fromData, toData) -> {
+            if (fromData == null || toData == null) return false;
 
-        AccountData[] fromState = new AccountData[2];
-        AccountData[] toState = new AccountData[2];
-        boolean[] success = {false};
+            AccountData[] fromState = new AccountData[2];
+            AccountData[] toState = new AccountData[2];
+            boolean[] success = {false};
 
-        // Order the locks to prevent deadlocks
-        withLocks(from, to, () -> {
-            AccountData fromData = cache.get(from);
-            AccountData toData = cache.get(to);
+            withLocks(from, to, () -> {
+                // Re-fetch from cache inside locks to get latest
+                AccountData f = cache.get(from);
+                AccountData t = cache.get(to);
 
-            if (fromData != null && toData != null && fromData.balance().compareTo(amount) >= 0) {
-                fromState[0] = fromData;
-                toState[0] = toData;
+                if (f != null && t != null && f.balance().compareTo(amount) >= 0) {
+                    fromState[0] = f;
+                    toState[0] = t;
 
-                // Apply math
-                fromState[1] = new AccountData(fromData.name(), fromData.balance().subtract(amount));
-                toState[1] = new AccountData(toData.name(), toData.balance().add(amount).min(MAX_BALANCE));
+                    fromState[1] = new AccountData(f.name(), f.balance().subtract(amount), f.revision());
+                    toState[1] = new AccountData(t.name(), t.balance().add(amount).min(MAX_BALANCE), t.revision());
 
-                // Cache
-                cache.put(from, fromState[1]);
-                cache.put(to, toState[1]);
-                success[0] = true;
+                    cache.put(from, fromState[1]);
+                    cache.put(to, toState[1]);
+                    success[0] = true;
+                }
+            });
+
+            if (success[0]) {
+                // Async chain the saves
+                storage.saveAccount(from, fromState[1]).thenCompose(s1 -> 
+                    storage.saveAccount(to, toState[1])
+                ).thenAccept(s2 -> {
+                    publishAndNotify(from, fromState[0], fromState[1]);
+                    publishAndNotify(to, toState[0], toState[1]);
+                });
             }
+
+            return success[0];
         });
-
-        // Do the heavy I/O outside the locks
-        if (success[0]) {
-            storage.saveAccount(from, fromState[1]);
-            storage.saveAccount(to, toState[1]);
-            publishAndNotify(from, fromState[0], fromState[1]);
-            publishAndNotify(to, toState[0], toState[1]);
-        }
-
-        return success[0];
     }
 
     private void withLocks(UUID uuid1, UUID uuid2, Runnable action) {
         Lock lock1 = locks.get(uuid1);
         Lock lock2 = locks.get(uuid2);
 
-        // Always lock in a consistent order to prevent deadlocks
         Lock first = uuid1.compareTo(uuid2) < 0 ? lock1 : lock2;
         Lock second = first == lock1 ? lock2 : lock1;
 
@@ -181,136 +182,148 @@ public class EconomyManager {
         }
     }
 
-    public boolean setBalance(UUID uuid, BigDecimal amount) {
+    public CompletableFuture<Boolean> setBalance(UUID uuid, BigDecimal amount) {
         BigDecimal clamped = amount.max(BigDecimal.ZERO).min(MAX_BALANCE);
 
-        for (int retry = 0; retry < 5; retry++) {
-            AccountData current = ensureCached(uuid);
-            if (current == null) return false;
+        return ensureCachedAsync(uuid).thenCompose(current -> {
+            if (current == null) return CompletableFuture.completedFuture(false);
 
             AccountData updated = new AccountData(current.name(), clamped, current.revision());
             
-            // Atomic check-and-set save
-            if (storage.saveAccount(uuid, updated)) {
-                Lock lock = locks.get(uuid);
-                lock.lock();
-                try {
-                    cache.put(uuid, updated);
-                } finally {
-                    lock.unlock();
+            return storage.saveAccount(uuid, updated).thenApply(success -> {
+                if (success) {
+                    Lock lock = locks.get(uuid);
+                    lock.lock();
+                    try {
+                        cache.put(uuid, updated);
+                    } finally {
+                        lock.unlock();
+                    }
+                    publishAndNotify(uuid, current, updated);
+                    return true;
+                } else {
+                    // Collision! Someone else updated the data. Clear cache for next try.
+                    cache.remove(uuid);
+                    return false; // Let the caller/retry handle it
                 }
-                publishAndNotify(uuid, current, updated);
-                return true;
-            } else {
-                // Collision! Someone else updated the data. Clear cache and try again.
-                cache.remove(uuid);
-            }
-        }
-        return false;
+            });
+        });
     }
 
-    public boolean addBalance(UUID uuid, BigDecimal amount) {
-        if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
+    public CompletableFuture<Boolean> addBalance(UUID uuid, BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
 
-        for (int retry = 0; retry < 5; retry++) {
-            AccountData current = ensureCached(uuid);
-            if (current == null) return false;
+        return ensureCachedAsync(uuid).thenCompose(current -> {
+            if (current == null) return CompletableFuture.completedFuture(false);
 
             AccountData updated = new AccountData(current.name(), current.balance().add(amount).min(MAX_BALANCE), current.revision());
             
-            if (storage.saveAccount(uuid, updated)) {
-                Lock lock = locks.get(uuid);
-                lock.lock();
-                try {
-                    cache.put(uuid, updated);
-                } finally {
-                    lock.unlock();
+            return storage.saveAccount(uuid, updated).thenApply(success -> {
+                if (success) {
+                    Lock lock = locks.get(uuid);
+                    lock.lock();
+                    try {
+                        cache.put(uuid, updated);
+                    } finally {
+                        lock.unlock();
+                    }
+                    publishAndNotify(uuid, current, updated);
+                    return true;
+                } else {
+                    cache.remove(uuid);
+                    return false;
                 }
-                publishAndNotify(uuid, current, updated);
-                return true;
-            } else {
-                cache.remove(uuid);
-            }
-        }
-        return false;
+            });
+        });
     }
 
-    public boolean removeBalance(UUID uuid, BigDecimal amount) {
-        if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
+    public CompletableFuture<Boolean> removeBalance(UUID uuid, BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
 
-        for (int retry = 0; retry < 5; retry++) {
-            AccountData current = ensureCached(uuid);
-            if (current == null) return false;
-            if (current.balance().compareTo(amount) < 0) return false;
+        return ensureCachedAsync(uuid).thenCompose(current -> {
+            if (current == null || current.balance().compareTo(amount) < 0) 
+                return CompletableFuture.completedFuture(false);
 
             AccountData updated = new AccountData(current.name(), current.balance().subtract(amount), current.revision());
             
-            if (storage.saveAccount(uuid, updated)) {
-                Lock lock = locks.get(uuid);
-                lock.lock();
-                try {
-                    cache.put(uuid, updated);
-                } finally {
-                    lock.unlock();
+            return storage.saveAccount(uuid, updated).thenApply(success -> {
+                if (success) {
+                    Lock lock = locks.get(uuid);
+                    lock.lock();
+                    try {
+                        cache.put(uuid, updated);
+                    } finally {
+                        lock.unlock();
+                    }
+                    publishAndNotify(uuid, current, updated);
+                    return true;
+                } else {
+                    cache.remove(uuid);
+                    return false;
                 }
-                publishAndNotify(uuid, current, updated);
-                return true;
-            } else {
-                cache.remove(uuid);
-            }
-        }
-        return false;
+            });
+        });
     }
 
-    private AccountData ensureCached(UUID uuid) {
+    private CompletableFuture<AccountData> ensureCachedAsync(UUID uuid) {
         AccountData data = cache.get(uuid);
-        if (data == null) {
-            data = storage.loadAccount(uuid);
-            if (data != null) {
-                cache.putIfAbsent(uuid, data);
-                reverseCache.putIfAbsent(data.name().toLowerCase(), uuid);
+        if (data != null) return CompletableFuture.completedFuture(data);
+
+        return storage.loadAccount(uuid).thenApply(loaded -> {
+            if (loaded != null) {
+                cache.putIfAbsent(uuid, loaded);
+                reverseCache.putIfAbsent(loaded.name().toLowerCase(), uuid);
             }
-        }
-        return data;
+            return loaded;
+        });
     }
 
-    public AccountData getOrCreateAccount(UUID uuid, String name) {
-        AccountData[] state = new AccountData[2]; // [0] = old, [1] = new
-        AccountData result;
-        
+    @Deprecated
+    private AccountData ensureCached(UUID uuid) {
+        return cache.get(uuid);
+    }
+
+    public CompletableFuture<AccountData> getOrCreateAccount(UUID uuid, String name) {
         Lock lock = locks.get(uuid);
         lock.lock();
         try {
             AccountData existing = cache.get(uuid);
             if (existing != null) {
                 if (name != null && !name.equalsIgnoreCase(existing.name())) {
+                    AccountData updated = new AccountData(name, existing.balance(), existing.revision());
                     reverseCache.remove(existing.name().toLowerCase());
-                    state[0] = existing;
-                    state[1] = new AccountData(name, existing.balance());
                     reverseCache.put(name.toLowerCase(), uuid);
-                    cache.put(uuid, state[1]);
-                    result = state[1];
-                } else {
-                    result = existing;
+                    cache.put(uuid, updated);
+                    return storage.saveAccount(uuid, updated).thenApply(v -> updated);
                 }
-            } else {
-                AccountData loaded = storage.loadAccount(uuid);
-                if (loaded == null) {
-                    loaded = new AccountData(name, getConfig().getDefaultBalance());
-                }
-                if (name != null) reverseCache.put(name.toLowerCase(), uuid);
-                state[1] = loaded;
-                cache.put(uuid, loaded);
-                result = loaded;
+                return CompletableFuture.completedFuture(existing);
             }
         } finally {
             lock.unlock();
         }
 
-        if (state[1] != null) {
-            publishAndNotify(uuid, state[0], state[1]);
-        }
-        return result;
+        return storage.loadAccount(uuid).thenCompose(loaded -> {
+            AccountData result = loaded;
+            if (result == null) {
+                result = new AccountData(name, getConfig().getDefaultBalance());
+            } else if (name != null && !name.equalsIgnoreCase(result.name())) {
+                result = new AccountData(name, result.balance(), result.revision());
+            }
+
+            final AccountData finalResult = result;
+            return storage.saveAccount(uuid, finalResult).thenApply(success -> {
+                Lock l = locks.get(uuid);
+                l.lock();
+                try {
+                    cache.put(uuid, finalResult);
+                    if (name != null) reverseCache.put(name.toLowerCase(), uuid);
+                } finally {
+                    l.unlock();
+                }
+                publishAndNotify(uuid, loaded, finalResult);
+                return finalResult;
+            });
+        });
     }
 
     public void resetBalance(UUID uuid) {
@@ -325,7 +338,11 @@ public class EconomyManager {
     }
 
     private void publishAndNotify(UUID uuid, AccountData oldData, AccountData newData) {
-        // 1. Handle in-game notifications if the balance actually changed
+        if (oldData != null && newData.balance().compareTo(oldData.balance()) == 0 && oldData.name().equals(newData.name())) {
+            return; // No meaningful change
+        }
+
+        // Notify player in-game
         if (oldData != null && newData.balance().compareTo(oldData.balance()) != 0) {
             if (getConfig().isDiffMessageEnabled(uuid)) {
                 BigDecimal diff = newData.balance().subtract(oldData.balance());
@@ -333,7 +350,7 @@ public class EconomyManager {
             }
         }
         
-        // 2. Broadcast to the active messaging provider
+        // Broadcast to other servers
         messaging.publish(uuid, newData);
     }
 

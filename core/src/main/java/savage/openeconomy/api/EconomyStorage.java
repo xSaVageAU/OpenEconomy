@@ -2,18 +2,20 @@ package savage.openeconomy.api;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Interface for economy storage implementations.
- * Defines the contract for reading and writing account data.
+ * Defines the contract for reading and writing account data using CompletableFutures
+ * to support non-blocking I/O operations.
  */
 public interface EconomyStorage {
     
-    AccountData loadAccount(UUID uuid);
+    CompletableFuture<AccountData> loadAccount(UUID uuid);
 
-    boolean saveAccount(UUID uuid, AccountData data);
+    CompletableFuture<Boolean> saveAccount(UUID uuid, AccountData data);
 
-    boolean deleteAccount(UUID uuid);
+    CompletableFuture<Boolean> deleteAccount(UUID uuid);
 
     Map<UUID, AccountData> loadAllAccounts();
 

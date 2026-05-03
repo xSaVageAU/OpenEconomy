@@ -80,20 +80,19 @@ public class ModEconomyCommands {
             throw new SimpleCommandExceptionType(Component.literal("You cannot pay yourself!")).create();
         }
 
-        boolean success = EconomyManager.getInstance().transfer(sender.getUUID(), targetUuid, amount);
-        if (!success) {
-            throw new SimpleCommandExceptionType(Component.literal("Transaction failed! (Check your balance)")).create();
-        }
-
-        // Notify
-        source.sendSuccess(() -> ModMessages.paySent(targetName, amount), false);
-        
-        // If target is online, send them a message too
-        var server = source.getServer();
-        var onlineTarget = server.getPlayerList().getPlayer(targetUuid);
-        if (onlineTarget != null) {
-            onlineTarget.sendSystemMessage(ModMessages.payReceived(sender.getGameProfile().name(), amount));
-        }
+        EconomyManager.getInstance().transfer(sender.getUUID(), targetUuid, amount).thenAccept(success -> {
+            if (success) {
+                source.sendSuccess(() -> ModMessages.paySent(targetName, amount), false);
+                
+                var server = source.getServer();
+                var onlineTarget = server.getPlayerList().getPlayer(targetUuid);
+                if (onlineTarget != null) {
+                    onlineTarget.sendSystemMessage(ModMessages.payReceived(sender.getGameProfile().name(), amount));
+                }
+            } else {
+                source.sendFailure(Component.literal("Transaction failed! (Check your balance or try again)"));
+            }
+        });
 
         return 1;
     }
@@ -104,8 +103,13 @@ public class ModEconomyCommands {
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
 
-        EconomyManager.getInstance().addBalance(targetUuid, amount);
-        source.sendSuccess(() -> ModMessages.giveSuccess(targetName, amount), true);
+        EconomyManager.getInstance().addBalance(targetUuid, amount).thenAccept(success -> {
+            if (success) {
+                source.sendSuccess(() -> ModMessages.giveSuccess(targetName, amount), true);
+            } else {
+                source.sendFailure(Component.literal("Failed to add balance. Storage error."));
+            }
+        });
         return 1;
     }
 
@@ -115,8 +119,13 @@ public class ModEconomyCommands {
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
 
-        EconomyManager.getInstance().removeBalance(targetUuid, amount);
-        source.sendSuccess(() -> ModMessages.takeSuccess(targetName, amount), true);
+        EconomyManager.getInstance().removeBalance(targetUuid, amount).thenAccept(success -> {
+            if (success) {
+                source.sendSuccess(() -> ModMessages.takeSuccess(targetName, amount), true);
+            } else {
+                source.sendFailure(Component.literal("Failed to remove balance. (Insufficient funds?)"));
+            }
+        });
         return 1;
     }
 
@@ -126,8 +135,13 @@ public class ModEconomyCommands {
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
 
-        EconomyManager.getInstance().setBalance(targetUuid, amount);
-        source.sendSuccess(() -> ModMessages.setSuccess(targetName, amount), true);
+        EconomyManager.getInstance().setBalance(targetUuid, amount).thenAccept(success -> {
+            if (success) {
+                source.sendSuccess(() -> ModMessages.setSuccess(targetName, amount), true);
+            } else {
+                source.sendFailure(Component.literal("Failed to set balance. Storage error."));
+            }
+        });
         return 1;
     }
 
