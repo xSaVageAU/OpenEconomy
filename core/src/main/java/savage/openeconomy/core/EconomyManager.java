@@ -293,14 +293,6 @@ public class EconomyManager {
                 .toList();
     }
 
-    public UUID getUUIDFromName(String name) {
-        return reverseCache.get(name.toLowerCase());
-    }
-
-    public java.util.Collection<String> getKnownNames() {
-        return cache.values().stream().map(AccountData::name).toList();
-    }
-
     public void shutdown() {
         if (messaging != null) messaging.shutdown();
         if (storage != null) storage.shutdown();
