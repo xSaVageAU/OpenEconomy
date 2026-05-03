@@ -8,6 +8,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import savage.openeconomy.core.EconomyManager;
 import savage.openeconomy.util.CurrencyFormatter;
+import savage.openeconomy.mod.util.ModMessages;
 import java.math.BigDecimal;
 
 /**
@@ -61,8 +62,8 @@ public class ModEconomyCommands {
                     economy.addBalance(target.getUUID(), amount);
 
                     // Notify
-                    source.sendSuccess(() -> savage.openeconomy.util.EconomyMessages.paySent(target.getGameProfile().name(), amount), false);
-                    target.sendSystemMessage(savage.openeconomy.util.EconomyMessages.payReceived(sender.getGameProfile().name(), amount));
+                    source.sendSuccess(() -> ModMessages.paySent(target.getGameProfile().name(), amount), false);
+                    target.sendSystemMessage(ModMessages.payReceived(sender.getGameProfile().name(), amount));
 
                     return 1;
                 }))));
