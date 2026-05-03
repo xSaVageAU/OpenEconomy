@@ -293,6 +293,22 @@ public class EconomyManager {
                 .toList();
     }
 
+    private void commitAndPublish(UUID uuid, AccountData oldData, AccountData newData) {
+        // 1. Save to the active storage provider
+        storage.saveAccount(uuid, newData);
+        
+        // 2. Handle in-game notifications if the balance actually changed
+        if (oldData != null && newData.balance().compareTo(oldData.balance()) != 0) {
+            if (getConfig().isDiffMessageEnabled(uuid)) {
+                BigDecimal diff = newData.balance().subtract(oldData.balance());
+                EconomyMessages.sendBalanceUpdate(uuid, diff, newData.balance());
+            }
+        }
+        
+        // 3. Broadcast to the active messaging provider
+        messaging.publish(uuid, newData);
+    }
+
     public void shutdown() {
         if (messaging != null) messaging.shutdown();
         if (storage != null) storage.shutdown();
