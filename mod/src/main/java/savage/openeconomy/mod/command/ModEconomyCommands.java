@@ -37,12 +37,20 @@ public class ModEconomyCommands {
         // Register the /pay command
         dispatcher.register(Commands.literal("pay")
                 .then(Commands.argument("target", net.minecraft.commands.arguments.EntityArgument.player())
-                .then(Commands.argument("amount", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.01))
+                .then(Commands.argument("amount", com.mojang.brigadier.arguments.StringArgumentType.string())
                 .executes(context -> {
                     var source = context.getSource();
                     var sender = source.getPlayerOrException();
                     var target = net.minecraft.commands.arguments.EntityArgument.getPlayer(context, "target");
-                    var amount = BigDecimal.valueOf(com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(context, "amount"));
+                    
+                    BigDecimal amount;
+                    try {
+                        amount = new BigDecimal(com.mojang.brigadier.arguments.StringArgumentType.getString(context, "amount"));
+                        if (amount.compareTo(new BigDecimal("0.01")) < 0) throw new NumberFormatException();
+                    } catch (Exception e) {
+                        source.sendFailure(Component.literal("Invalid amount! Use a positive number like 10.50").withStyle(ChatFormatting.RED));
+                        return 0;
+                    }
 
                     if (sender.getUUID().equals(target.getUUID())) {
                         source.sendFailure(Component.literal("You cannot pay yourself!").withStyle(ChatFormatting.RED));
@@ -72,11 +80,19 @@ public class ModEconomyCommands {
         dispatcher.register(Commands.literal("eco")
                 .then(Commands.literal("give")
                         .then(Commands.argument("target", net.minecraft.commands.arguments.EntityArgument.player())
-                        .then(Commands.argument("amount", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.01))
+                        .then(Commands.argument("amount", com.mojang.brigadier.arguments.StringArgumentType.string())
                         .executes(context -> {
                             var source = context.getSource();
                             var target = net.minecraft.commands.arguments.EntityArgument.getPlayer(context, "target");
-                            var amount = BigDecimal.valueOf(com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(context, "amount"));
+                            
+                            BigDecimal amount;
+                            try {
+                                amount = new BigDecimal(com.mojang.brigadier.arguments.StringArgumentType.getString(context, "amount"));
+                                if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new NumberFormatException();
+                            } catch (Exception e) {
+                                source.sendFailure(Component.literal("Invalid amount!").withStyle(ChatFormatting.RED));
+                                return 0;
+                            }
 
                             EconomyManager.getInstance().addBalance(target.getUUID(), amount);
                             
@@ -85,11 +101,19 @@ public class ModEconomyCommands {
                         }))))
                 .then(Commands.literal("take")
                         .then(Commands.argument("target", net.minecraft.commands.arguments.EntityArgument.player())
-                        .then(Commands.argument("amount", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.01))
+                        .then(Commands.argument("amount", com.mojang.brigadier.arguments.StringArgumentType.string())
                         .executes(context -> {
                             var source = context.getSource();
                             var target = net.minecraft.commands.arguments.EntityArgument.getPlayer(context, "target");
-                            var amount = BigDecimal.valueOf(com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(context, "amount"));
+                            
+                            BigDecimal amount;
+                            try {
+                                amount = new BigDecimal(com.mojang.brigadier.arguments.StringArgumentType.getString(context, "amount"));
+                                if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new NumberFormatException();
+                            } catch (Exception e) {
+                                source.sendFailure(Component.literal("Invalid amount!").withStyle(ChatFormatting.RED));
+                                return 0;
+                            }
 
                             EconomyManager.getInstance().removeBalance(target.getUUID(), amount);
                             

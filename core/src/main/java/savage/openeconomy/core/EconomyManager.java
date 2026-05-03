@@ -96,13 +96,15 @@ public class EconomyManager {
         return data != null ? data.balance() : getConfig().getDefaultBalance();
     }
 
-    public boolean setBalance(UUID uuid, BigDecimal balance) {
-        final BigDecimal clamped = balance.min(MAX_BALANCE).max(BigDecimal.ZERO);
+    public boolean setBalance(UUID uuid, BigDecimal amount) {
+        BigDecimal clamped = amount.max(BigDecimal.ZERO).min(MAX_BALANCE);
+
+        // Ensure account is loaded outside the lock
+        if (ensureCached(uuid) == null) return false;
+
         final boolean[] success = {false};
-        cache.compute(uuid, (key, existing) -> {
-            AccountData current = (existing != null) ? existing : storage.loadAccount(uuid);
+        cache.compute(uuid, (key, current) -> {
             if (current == null) {
-                OpenEconomy.LOGGER.warn("Cannot set balance for unknown account: {}", uuid);
                 return null;
             }
             AccountData updated = new AccountData(current.name(), clamped);
@@ -119,10 +121,14 @@ public class EconomyManager {
 
     public boolean addBalance(UUID uuid, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
+        
+        // Ensure account is loaded outside the lock
+        if (ensureCached(uuid) == null) return false;
+
         final boolean[] success = {false};
-        cache.compute(uuid, (key, existing) -> {
-            AccountData current = (existing != null) ? existing : storage.loadAccount(uuid);
+        cache.compute(uuid, (key, current) -> {
             if (current == null) return null;
+            
             BigDecimal newBal = current.balance().add(amount).min(MAX_BALANCE);
             AccountData updated = new AccountData(current.name(), newBal);
             storage.saveAccount(uuid, updated);
@@ -139,11 +145,14 @@ public class EconomyManager {
 
     public boolean removeBalance(UUID uuid, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
+
+        // Ensure account is loaded outside the lock
+        if (ensureCached(uuid) == null) return false;
+
         final boolean[] success = {false};
-        cache.compute(uuid, (key, existing) -> {
-            AccountData current = (existing != null) ? existing : storage.loadAccount(uuid);
+        cache.compute(uuid, (key, current) -> {
             if (current == null || current.balance().compareTo(amount) < 0) {
-                return current; // null stays null, existing stays cached
+                return current;
             }
             AccountData updated = new AccountData(current.name(), current.balance().subtract(amount));
             storage.saveAccount(uuid, updated);
@@ -156,6 +165,18 @@ public class EconomyManager {
             return updated;
         });
         return success[0];
+    }
+
+    private AccountData ensureCached(UUID uuid) {
+        AccountData data = cache.get(uuid);
+        if (data == null) {
+            data = storage.loadAccount(uuid);
+            if (data != null) {
+                cache.putIfAbsent(uuid, data);
+                reverseCache.putIfAbsent(data.name().toLowerCase(), uuid);
+            }
+        }
+        return data;
     }
 
     public AccountData getOrCreateAccount(UUID uuid, String name) {
