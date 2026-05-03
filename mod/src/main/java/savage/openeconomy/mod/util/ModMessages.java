@@ -27,4 +27,22 @@ public class ModMessages {
                 .append(Component.literal(sender).withStyle(ChatFormatting.YELLOW))
                 .append(Component.literal(".").withStyle(ChatFormatting.GRAY));
     }
+
+    public static Component giveSuccess(String target, BigDecimal amount) {
+        return Component.empty()
+                .append(Component.literal("Gave ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(CurrencyFormatter.format(amount)).withStyle(ChatFormatting.GOLD))
+                .append(Component.literal(" to ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(target).withStyle(ChatFormatting.YELLOW))
+                .append(Component.literal(".").withStyle(ChatFormatting.GRAY));
+    }
+
+    public static Component takeSuccess(String target, BigDecimal amount) {
+        return Component.empty()
+                .append(Component.literal("Took ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(CurrencyFormatter.format(amount)).withStyle(ChatFormatting.GOLD))
+                .append(Component.literal(" from ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(target).withStyle(ChatFormatting.YELLOW))
+                .append(Component.literal(".").withStyle(ChatFormatting.GRAY));
+    }
 }

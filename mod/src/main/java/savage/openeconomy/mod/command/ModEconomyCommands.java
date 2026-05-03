@@ -67,5 +67,34 @@ public class ModEconomyCommands {
 
                     return 1;
                 }))));
+
+        // Register the /eco command (Admin)
+        dispatcher.register(Commands.literal("eco")
+                .then(Commands.literal("give")
+                        .then(Commands.argument("target", net.minecraft.commands.arguments.EntityArgument.player())
+                        .then(Commands.argument("amount", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.01))
+                        .executes(context -> {
+                            var source = context.getSource();
+                            var target = net.minecraft.commands.arguments.EntityArgument.getPlayer(context, "target");
+                            var amount = BigDecimal.valueOf(com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(context, "amount"));
+
+                            EconomyManager.getInstance().addBalance(target.getUUID(), amount);
+                            
+                            source.sendSuccess(() -> ModMessages.giveSuccess(target.getGameProfile().name(), amount), true);
+                            return 1;
+                        }))))
+                .then(Commands.literal("take")
+                        .then(Commands.argument("target", net.minecraft.commands.arguments.EntityArgument.player())
+                        .then(Commands.argument("amount", com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.01))
+                        .executes(context -> {
+                            var source = context.getSource();
+                            var target = net.minecraft.commands.arguments.EntityArgument.getPlayer(context, "target");
+                            var amount = BigDecimal.valueOf(com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(context, "amount"));
+
+                            EconomyManager.getInstance().removeBalance(target.getUUID(), amount);
+                            
+                            source.sendSuccess(() -> ModMessages.takeSuccess(target.getGameProfile().name(), amount), true);
+                            return 1;
+                        })))));
     }
 }
