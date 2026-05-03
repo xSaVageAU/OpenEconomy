@@ -18,10 +18,9 @@
 		"main": [
 			"savage.openeconomy.OpenEconomy"
 		],
-		"openeconomy:storage": [
-			"savage.openeconomy.storage.JsonStorageProvider"
-		],
-		"openeconomy:messaging": []
+		"openeconomy:messaging": [
+			"savage.openeconomy.messaging.NoOpMessagingProvider"
+		]
 	},
 	"depends": {
 		"fabricloader": ">=0.18.5",
