@@ -58,56 +58,62 @@ public class NatsEconomyStorage implements EconomyStorage {
 
     @Override
     public CompletableFuture<AccountData> loadAccount(UUID uuid) {
-        try {
-            KeyValueEntry entry = kv.get(uuid.toString());
-            if (entry == null) return CompletableFuture.completedFuture(null);
-            AccountData data = deserialize(entry.getValueAsString());
-            // Store the NATS revision for optimistic locking
-            return CompletableFuture.completedFuture(new AccountData(data.name(), data.balance(), entry.getRevision()));
-        } catch (Exception e) {
-            LOGGER.error("Failed to load account {} from KV: {}", uuid, e.getMessage());
-            return CompletableFuture.completedFuture(null);
-        }
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                KeyValueEntry entry = kv.get(uuid.toString());
+                if (entry == null) return null;
+                AccountData data = deserialize(entry.getValueAsString());
+                // Store the NATS revision for optimistic locking
+                return new AccountData(data.name(), data.balance(), entry.getRevision());
+            } catch (Exception e) {
+                LOGGER.error("Failed to load account {} from KV: {}", uuid, e.getMessage());
+                return null;
+            }
+        });
     }
 
     @Override
     public CompletableFuture<Boolean> saveAccount(UUID uuid, AccountData data) {
-        try {
-            byte[] value = serialize(data);
-            String key = uuid.toString();
-            
-            if (data.revision() <= 0) {
-                // New account: use create() which fails if the key already exists
-                try {
-                    kv.create(key, value);
-                    return CompletableFuture.completedFuture(true);
-                } catch (io.nats.client.JetStreamApiException e) {
-                    return CompletableFuture.completedFuture(false); // Key collision
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                byte[] value = serialize(data);
+                String key = uuid.toString();
+                
+                if (data.revision() <= 0) {
+                    // New account: use create() which fails if the key already exists
+                    try {
+                        kv.create(key, value);
+                        return true;
+                    } catch (io.nats.client.JetStreamApiException e) {
+                        return false; // Key collision
+                    }
+                } else {
+                    // Existing account: use update() which fails if the sequence doesn't match
+                    try {
+                        kv.update(key, value, data.revision());
+                        return true;
+                    } catch (io.nats.client.JetStreamApiException e) {
+                        return false; // Revision mismatch (Optimistic Lock failure)
+                    }
                 }
-            } else {
-                // Existing account: use update() which fails if the sequence doesn't match
-                try {
-                    kv.update(key, value, data.revision());
-                    return CompletableFuture.completedFuture(true);
-                } catch (io.nats.client.JetStreamApiException e) {
-                    return CompletableFuture.completedFuture(false); // Revision mismatch (Optimistic Lock failure)
-                }
+            } catch (Exception e) {
+                LOGGER.error("Failed to save account {} to KV: {}", uuid, e.getMessage());
+                return false;
             }
-        } catch (Exception e) {
-            LOGGER.error("Failed to save account {} to KV: {}", uuid, e.getMessage());
-            return CompletableFuture.completedFuture(false);
-        }
+        });
     }
 
     @Override
     public CompletableFuture<Boolean> deleteAccount(UUID uuid) {
-        try {
-            kv.delete(uuid.toString());
-            return CompletableFuture.completedFuture(true);
-        } catch (Exception e) {
-            LOGGER.error("Failed to delete account {} from KV: {}", uuid, e.getMessage());
-            return CompletableFuture.completedFuture(false);
-        }
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                kv.delete(uuid.toString());
+                return true;
+            } catch (Exception e) {
+                LOGGER.error("Failed to delete account {} from KV: {}", uuid, e.getMessage());
+                return false;
+            }
+        });
     }
 
     @Override

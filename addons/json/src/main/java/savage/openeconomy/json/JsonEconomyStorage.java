@@ -34,15 +34,17 @@ public class JsonEconomyStorage implements EconomyStorage {
 
     @Override
     public CompletableFuture<AccountData> loadAccount(UUID uuid) {
-        Path file = storageDir.resolve(uuid.toString() + ".json");
-        if (!Files.exists(file)) return CompletableFuture.completedFuture(null);
+        return CompletableFuture.supplyAsync(() -> {
+            Path file = storageDir.resolve(uuid.toString() + ".json");
+            if (!Files.exists(file)) return null;
 
-        try (var reader = Files.newBufferedReader(file)) {
-            return CompletableFuture.completedFuture(GSON.fromJson(reader, AccountData.class));
-        } catch (IOException e) {
-            OpenEconomy.LOGGER.error("Failed to load account {}: {}", uuid, e.getMessage());
-            return CompletableFuture.completedFuture(null);
-        }
+            try (var reader = Files.newBufferedReader(file)) {
+                return GSON.fromJson(reader, AccountData.class);
+            } catch (IOException e) {
+                OpenEconomy.LOGGER.error("Failed to load account {}: {}", uuid, e.getMessage());
+                return null;
+            }
+        });
     }
 
     @Override
