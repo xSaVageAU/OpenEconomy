@@ -8,7 +8,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import savage.openeconomy.config.EconomyConfig;
+import savage.openeconomy.core.EconomyManager;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -40,8 +40,8 @@ public class OpenEconomyProvider implements EconomyProvider {
 
     @Override
     public EconomyCurrency getCurrency(MinecraftServer server, String id) {
-        if (id.equalsIgnoreCase(EconomyConfig.CURRENCY_ID)
-                || id.equalsIgnoreCase(EconomyConfig.PROVIDER_ID + ":" + EconomyConfig.CURRENCY_ID)) {
+        if (id.equalsIgnoreCase(EconomyManager.getConfig().getCurrencyId())
+                || id.equalsIgnoreCase(EconomyManager.getConfig().getProviderId() + ":" + EconomyManager.getConfig().getCurrencyId())) {
             return currency;
         }
         return null;

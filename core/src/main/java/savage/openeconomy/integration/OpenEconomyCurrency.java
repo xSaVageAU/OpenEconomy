@@ -6,8 +6,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import savage.openeconomy.config.EconomyConfig;
-
+import savage.openeconomy.core.EconomyManager;
+import savage.openeconomy.core.EconomyCoreConfig;
 import savage.openeconomy.util.CurrencyFormatter;
 
 import java.math.BigDecimal;
@@ -15,7 +15,7 @@ import java.math.BigInteger;
 
 /**
  * Common Economy API currency implementation.
- * Uses a 100-scale (cents) representation for the BigInteger API values.
+ * Uses a configurable scale representation for the BigInteger API values.
  */
 public class OpenEconomyCurrency implements EconomyCurrency {
 
@@ -27,17 +27,18 @@ public class OpenEconomyCurrency implements EconomyCurrency {
 
     @Override
     public Component name() {
-        return Component.literal(EconomyConfig.instance().currencyName);
+        return Component.literal(EconomyManager.getConfig().getCurrencyName());
     }
 
     @Override
     public Identifier id() {
-        return Identifier.fromNamespaceAndPath(EconomyConfig.PROVIDER_ID, EconomyConfig.CURRENCY_ID);
+        EconomyCoreConfig cfg = EconomyManager.getConfig();
+        return Identifier.fromNamespaceAndPath(cfg.getProviderId(), cfg.getCurrencyId());
     }
 
     @Override
     public String formatValue(BigInteger value, boolean full) {
-        BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal(EconomyConfig.instance().economyScale));
+        BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal(EconomyManager.getConfig().getEconomyScale()));
         return CurrencyFormatter.format(dollars);
     }
 
@@ -52,7 +53,7 @@ public class OpenEconomyCurrency implements EconomyCurrency {
             if (value == null || value.isEmpty()) return BigInteger.ZERO;
             String sanitized = value.replaceAll("[^0-9.\\-]", "");
             if (sanitized.isEmpty() || sanitized.equals("-") || sanitized.equals(".")) return BigInteger.ZERO;
-            return new BigDecimal(sanitized).multiply(new BigDecimal(EconomyConfig.instance().economyScale)).toBigInteger();
+            return new BigDecimal(sanitized).multiply(new BigDecimal(EconomyManager.getConfig().getEconomyScale())).toBigInteger();
         } catch (Exception e) {
             return BigInteger.ZERO;
         }

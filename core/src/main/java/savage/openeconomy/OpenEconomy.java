@@ -10,8 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import savage.openeconomy.command.EconomyCommands;
 import savage.openeconomy.core.EconomyManager;
-import savage.openeconomy.config.ConfigManager;
-import savage.openeconomy.config.EconomyConfig;
 import savage.openeconomy.integration.OpenEconomyProvider;
 import savage.openeconomy.messaging.MessagingRegistry;
 import savage.openeconomy.storage.StorageRegistry;
@@ -28,9 +26,8 @@ public class OpenEconomy implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        LOGGER.info("OpenEconomy is initializing...");
+        LOGGER.info("OpenEconomy Core Engine is initializing...");
 
-        ConfigManager.load();
         StorageRegistry.discoverProviders();
         MessagingRegistry.discoverProviders();
 
@@ -40,8 +37,6 @@ public class OpenEconomy implements ModInitializer {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, srv) -> 
             EconomyManager.getInstance().getOrCreateAccount(handler.getPlayer().getUUID(), handler.getPlayer().getGameProfile().name()));
 
-        CommonEconomy.register(EconomyConfig.PROVIDER_ID, OpenEconomyProvider.INSTANCE);
-
         ServerLifecycleEvents.SERVER_STARTED.register(srv -> {
             server = srv;
             LOGGER.info("Server started, initializing economy cache...");
@@ -49,11 +44,11 @@ public class OpenEconomy implements ModInitializer {
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(srv -> {
-            LOGGER.info("OpenEconomy is shutting down...");
+            LOGGER.info("OpenEconomy Core Engine is shutting down...");
             EconomyManager.getInstance().shutdown();
             server = null;
         });
 
-        LOGGER.info("OpenEconomy initialized successfully.");
+        LOGGER.info("OpenEconomy Core Engine initialized.");
     }
 }

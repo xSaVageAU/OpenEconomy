@@ -1,0 +1,23 @@
+{
+	"schemaVersion": 1,
+	"id": "open-economy-mod",
+	"version": "${version}",
+	"name": "OpenEconomy",
+	"description": "Standard implementation of the OpenEconomy engine.",
+	"authors": [
+		"Savage"
+	],
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"savage.openeconomy.mod.OpenEconomyMod"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.18.5",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"open-economy": "*"
+	}
+}

@@ -1,6 +1,7 @@
 package savage.openeconomy.util;
 
-import savage.openeconomy.config.EconomyConfig;
+import savage.openeconomy.core.EconomyManager;
+import savage.openeconomy.core.EconomyCoreConfig;
 
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
@@ -9,16 +10,17 @@ import java.text.DecimalFormat;
  * Utility for formatting currency values.
  */
 public class CurrencyFormatter {
-    private static final ThreadLocal<DecimalFormat> FORMATTER = ThreadLocal.withInitial(() -> new DecimalFormat("#,##0.00"));
+
+    private static final DecimalFormat FORMAT = new DecimalFormat("#,##0.00");
 
     public static String format(BigDecimal amount) {
-        EconomyConfig cfg = EconomyConfig.instance();
-        String formattedNumber = FORMATTER.get().format(amount);
+        EconomyCoreConfig cfg = EconomyManager.getConfig();
+        String formatted = FORMAT.format(amount);
         
-        if (cfg.symbolBeforeAmount) {
-            return cfg.currencySymbol + formattedNumber;
+        if (cfg.isSymbolBeforeAmount()) {
+            return cfg.getCurrencySymbol() + formatted;
         } else {
-            return formattedNumber + cfg.currencySymbol;
+            return formatted + " " + cfg.getCurrencySymbol();
         }
     }
 }

@@ -16,5 +16,6 @@ pluginManagement {
 rootProject.name = 'open-economy'
 
 include 'core'
+include 'mod'
 include 'addons:json'
 include 'addons:nats'

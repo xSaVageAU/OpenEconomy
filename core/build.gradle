@@ -3,7 +3,7 @@
  * Shared config (Java, repos, MC deps, etc.) is inherited from the root build.gradle.
  */
 base {
-	archivesName = project.archives_base_name
+	archivesName = "open-economy-core"
 }
 
 loom {

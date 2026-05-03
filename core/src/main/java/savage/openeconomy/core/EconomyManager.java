@@ -2,9 +2,9 @@ package savage.openeconomy.core;
 
 import savage.openeconomy.OpenEconomy;
 import savage.openeconomy.api.AccountData;
+import savage.openeconomy.core.EconomyCoreConfig;
 import savage.openeconomy.api.EconomyMessaging;
 import savage.openeconomy.api.EconomyStorage;
-import savage.openeconomy.config.EconomyConfig;
 import savage.openeconomy.storage.AsyncStorage;
 import savage.openeconomy.messaging.MessagingRegistry;
 import savage.openeconomy.storage.StorageRegistry;
@@ -24,6 +24,18 @@ public class EconomyManager {
 
     public static final BigDecimal MAX_BALANCE = new BigDecimal("1000000000000000"); // 1 Quadrillion
     private static final EconomyManager INSTANCE = new EconomyManager();
+    private static EconomyCoreConfig config;
+
+    public static void setConfig(EconomyCoreConfig cfg) {
+        config = cfg;
+    }
+
+    public static EconomyCoreConfig getConfig() {
+        if (config == null) {
+            throw new IllegalStateException("EconomyCoreConfig has not been initialized by an implementation mod!");
+        }
+        return config;
+    }
 
     private final Map<UUID, AccountData> cache = new ConcurrentHashMap<>();
     private final Map<String, UUID> reverseCache = new ConcurrentHashMap<>();
@@ -37,15 +49,15 @@ public class EconomyManager {
     }
 
     public void init() {
-        EconomyConfig cfg = EconomyConfig.instance();
+        EconomyCoreConfig cfg = getConfig();
 
         // Wrap the chosen storage in AsyncStorage to handle non-blocking I/O
-        this.storage = new AsyncStorage(StorageRegistry.create(cfg.storageType));
-        OpenEconomy.LOGGER.info("Economy initialized with storage: {}", cfg.storageType);
+        this.storage = new AsyncStorage(StorageRegistry.create(cfg.getStorageType()));
+        OpenEconomy.LOGGER.info("Economy initialized with storage: {}", cfg.getStorageType());
 
         // Initialize messaging for cross-server cache sync
-        this.messaging = MessagingRegistry.create(cfg.messagingType);
-        OpenEconomy.LOGGER.info("Economy initialized with messaging: {}", cfg.messagingType);
+        this.messaging = MessagingRegistry.create(cfg.getMessagingType());
+        OpenEconomy.LOGGER.info("Economy initialized with messaging: {}", cfg.getMessagingType());
 
         // Load existing data into memory
         storage.loadAllAccounts().forEach((uuid, data) -> {
@@ -76,7 +88,7 @@ public class EconomyManager {
 
     public BigDecimal getBalance(UUID uuid) {
         AccountData data = cache.get(uuid);
-        return data != null ? data.balance() : EconomyConfig.instance().defaultBalanceDecimal();
+        return data != null ? data.balance() : getConfig().getDefaultBalance();
     }
 
     public boolean setBalance(UUID uuid, BigDecimal balance) {
@@ -146,7 +158,7 @@ public class EconomyManager {
 
             AccountData loaded = storage.loadAccount(uuid);
             if (loaded == null) {
-                loaded = new AccountData(name, EconomyConfig.instance().defaultBalanceDecimal());
+                loaded = new AccountData(name, getConfig().getDefaultBalance());
             }
             if (name != null) reverseCache.put(name.toLowerCase(), uuid);
             storage.saveAccount(uuid, loaded);
@@ -156,7 +168,7 @@ public class EconomyManager {
     }
 
     public void resetBalance(UUID uuid) {
-        setBalance(uuid, EconomyConfig.instance().defaultBalanceDecimal());
+        setBalance(uuid, getConfig().getDefaultBalance());
     }
 
     public List<AccountData> getTopAccounts(int limit) {
