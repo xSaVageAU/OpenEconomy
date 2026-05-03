@@ -16,5 +16,4 @@ loom {
 dependencies {
 	implementation project(":core")
 	include project(":core") // Bundle the engine with the implementation
-	include(implementation("org.yaml:snakeyaml:2.2"))
 }
