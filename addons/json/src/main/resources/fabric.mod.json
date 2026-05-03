@@ -1,0 +1,23 @@
+{
+	"schemaVersion": 1,
+	"id": "open-economy-json",
+	"version": "${version}",
+	"name": "OpenEconomy JSON Provider",
+	"description": "Default JSON file-based storage for OpenEconomy.",
+	"authors": [
+		"Savage"
+	],
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"openeconomy:storage": [
+			"savage.openeconomy.json.JsonStorageProvider"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.18.5",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"open-economy": "*"
+	}
+}

@@ -1,0 +1,18 @@
+/**
+ * OpenEconomy JSON Addon — Local file-based storage.
+ */
+base {
+	archivesName = "open-economy-json"
+}
+
+loom {
+	mods {
+		"open-economy-json" {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+dependencies {
+	compileOnly project(":core")
+}

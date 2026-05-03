@@ -1,4 +1,4 @@
-package savage.openeconomy.storage;
+package savage.openeconomy.json;
 
 import savage.openeconomy.api.EconomyStorage;
 import savage.openeconomy.api.StorageProvider;

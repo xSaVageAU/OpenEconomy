@@ -1,4 +1,4 @@
-package savage.openeconomy.storage;
+package savage.openeconomy.json;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
