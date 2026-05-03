@@ -42,87 +42,18 @@ public class ModEconomyCommands {
                 .then(Commands.literal("give")
                         .then(Commands.argument("target", StringArgumentType.word())
                         .suggests(PLAYER_SUGGESTIONS)
-                        .then(Commands.argument("amount", com.mojang.brigadier.arguments.StringArgumentType.string())
-                        .executes(context -> {
-                            var source = context.getSource();
-                            String targetName = StringArgumentType.getString(context, "target");
-                            UUID targetUuid = EconomyManager.getInstance().getUUIDByName(targetName);
-
-                            if (targetUuid == null) {
-                                source.sendFailure(Component.literal("Player not found!").withStyle(ChatFormatting.RED));
-                                return 0;
-                            }
-                            
-                            BigDecimal amount;
-                            try {
-                                amount = new BigDecimal(com.mojang.brigadier.arguments.StringArgumentType.getString(context, "amount"));
-                                if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new NumberFormatException();
-                            } catch (Exception e) {
-                                source.sendFailure(Component.literal("Invalid amount!").withStyle(ChatFormatting.RED));
-                                return 0;
-                            }
-
-                            EconomyManager.getInstance().addBalance(targetUuid, amount);
-                            
-                            source.sendSuccess(() -> ModMessages.giveSuccess(targetName, amount), true);
-                            return 1;
-                        }))))
+                        .then(Commands.argument("amount", StringArgumentType.string())
+                        .executes(ModEconomyCommands::executeGive))))
                 .then(Commands.literal("take")
                         .then(Commands.argument("target", StringArgumentType.word())
                         .suggests(PLAYER_SUGGESTIONS)
                         .then(Commands.argument("amount", StringArgumentType.string())
-                        .executes(context -> {
-                            var source = context.getSource();
-                            String targetName = StringArgumentType.getString(context, "target");
-                            UUID targetUuid = EconomyManager.getInstance().getUUIDByName(targetName);
-
-                            if (targetUuid == null) {
-                                source.sendFailure(Component.literal("Player not found!").withStyle(ChatFormatting.RED));
-                                return 0;
-                            }
-                            
-                            BigDecimal amount;
-                            try {
-                                amount = new BigDecimal(com.mojang.brigadier.arguments.StringArgumentType.getString(context, "amount"));
-                                if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new NumberFormatException();
-                            } catch (Exception e) {
-                                source.sendFailure(Component.literal("Invalid amount!").withStyle(ChatFormatting.RED));
-                                return 0;
-                            }
-
-                            EconomyManager.getInstance().removeBalance(targetUuid, amount);
-                            
-                            source.sendSuccess(() -> ModMessages.takeSuccess(targetName, amount), true);
-                            return 1;
-                        }))))
+                        .executes(ModEconomyCommands::executeTake))))
                 .then(Commands.literal("set")
                         .then(Commands.argument("target", StringArgumentType.word())
                         .suggests(PLAYER_SUGGESTIONS)
                         .then(Commands.argument("amount", StringArgumentType.string())
-                        .executes(context -> {
-                            var source = context.getSource();
-                            String targetName = StringArgumentType.getString(context, "target");
-                            UUID targetUuid = EconomyManager.getInstance().getUUIDByName(targetName);
-
-                            if (targetUuid == null) {
-                                source.sendFailure(Component.literal("Player not found!").withStyle(ChatFormatting.RED));
-                                return 0;
-                            }
-                            
-                            BigDecimal amount;
-                            try {
-                                amount = new BigDecimal(com.mojang.brigadier.arguments.StringArgumentType.getString(context, "amount"));
-                                if (amount.compareTo(BigDecimal.ZERO) < 0) throw new NumberFormatException();
-                            } catch (Exception e) {
-                                source.sendFailure(Component.literal("Invalid amount!").withStyle(ChatFormatting.RED));
-                                return 0;
-                            }
-
-                            EconomyManager.getInstance().setBalance(targetUuid, amount);
-                            
-                            source.sendSuccess(() -> ModMessages.setSuccess(targetName, amount), true);
-                            return 1;
-                        })))));
+                        .executes(ModEconomyCommands::executeSet)))));
     }
 
     private static int executeBalance(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -164,6 +95,39 @@ public class ModEconomyCommands {
             onlineTarget.sendSystemMessage(ModMessages.payReceived(sender.getGameProfile().name(), amount));
         }
 
+        return 1;
+    }
+
+    private static int executeGive(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        var source = context.getSource();
+        String targetName = StringArgumentType.getString(context, "target");
+        UUID targetUuid = resolveTarget(context);
+        BigDecimal amount = resolveAmount(context);
+
+        EconomyManager.getInstance().addBalance(targetUuid, amount);
+        source.sendSuccess(() -> ModMessages.giveSuccess(targetName, amount), true);
+        return 1;
+    }
+
+    private static int executeTake(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        var source = context.getSource();
+        String targetName = StringArgumentType.getString(context, "target");
+        UUID targetUuid = resolveTarget(context);
+        BigDecimal amount = resolveAmount(context);
+
+        EconomyManager.getInstance().removeBalance(targetUuid, amount);
+        source.sendSuccess(() -> ModMessages.takeSuccess(targetName, amount), true);
+        return 1;
+    }
+
+    private static int executeSet(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        var source = context.getSource();
+        String targetName = StringArgumentType.getString(context, "target");
+        UUID targetUuid = resolveTarget(context);
+        BigDecimal amount = resolveAmount(context);
+
+        EconomyManager.getInstance().setBalance(targetUuid, amount);
+        source.sendSuccess(() -> ModMessages.setSuccess(targetName, amount), true);
         return 1;
     }
 
