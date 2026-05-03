@@ -6,15 +6,21 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
+import net.minecraft.commands.SharedSuggestionProvider;
 import savage.openeconomy.core.EconomyManager;
 import savage.openeconomy.util.CurrencyFormatter;
 import savage.openeconomy.mod.util.ModMessages;
 import java.math.BigDecimal;
+import java.util.UUID;
 
 /**
  * Commands provided by the standard implementation mod.
  */
 public class ModEconomyCommands {
+    private static final SuggestionProvider<CommandSourceStack> PLAYER_SUGGESTIONS = (context, builder) -> 
+            SharedSuggestionProvider.suggest(EconomyManager.getInstance().getAllNames(), builder);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         // Define the balance logic
@@ -36,13 +42,19 @@ public class ModEconomyCommands {
 
         // Register the /pay command
         dispatcher.register(Commands.literal("pay")
-                .then(Commands.argument("target", net.minecraft.commands.arguments.EntityArgument.player())
-                .then(Commands.argument("amount", com.mojang.brigadier.arguments.StringArgumentType.string())
+                .then(Commands.argument("target", StringArgumentType.word())
+                .suggests(PLAYER_SUGGESTIONS)
+                .then(Commands.argument("amount", StringArgumentType.string())
                 .executes(context -> {
                     var source = context.getSource();
                     var sender = source.getPlayerOrException();
-                    var target = net.minecraft.commands.arguments.EntityArgument.getPlayer(context, "target");
+                    String targetName = StringArgumentType.getString(context, "target");
+                    UUID targetUuid = EconomyManager.getInstance().getUUIDByName(targetName);
                     
+                    if (targetUuid == null) {
+                        source.sendFailure(Component.literal("Player not found!").withStyle(ChatFormatting.RED));
+                        return 0;
+                    }
                     BigDecimal amount;
                     try {
                         amount = new BigDecimal(com.mojang.brigadier.arguments.StringArgumentType.getString(context, "amount"));
@@ -52,12 +64,12 @@ public class ModEconomyCommands {
                         return 0;
                     }
 
-                    if (sender.getUUID().equals(target.getUUID())) {
+                    if (sender.getUUID().equals(targetUuid)) {
                         source.sendFailure(Component.literal("You cannot pay yourself!").withStyle(ChatFormatting.RED));
                         return 0;
                     }
 
-                    boolean success = EconomyManager.getInstance().transfer(sender.getUUID(), target.getUUID(), amount);
+                    boolean success = EconomyManager.getInstance().transfer(sender.getUUID(), targetUuid, amount);
 
                     if (!success) {
                         source.sendFailure(Component.literal("Transaction failed! (Check your balance)").withStyle(ChatFormatting.RED));
@@ -65,20 +77,33 @@ public class ModEconomyCommands {
                     }
 
                     // Notify
-                    source.sendSuccess(() -> ModMessages.paySent(target.getGameProfile().name(), amount), false);
-                    target.sendSystemMessage(ModMessages.payReceived(sender.getGameProfile().name(), amount));
+                    source.sendSuccess(() -> ModMessages.paySent(targetName, amount), false);
+                    
+                    // If target is online, send them a message too
+                    var server = source.getServer();
+                    var onlineTarget = server.getPlayerList().getPlayer(targetUuid);
+                    if (onlineTarget != null) {
+                        onlineTarget.sendSystemMessage(ModMessages.payReceived(sender.getGameProfile().name(), amount));
+                    }
 
                     return 1;
                 }))));
 
-        // Register the /eco command (Admin)
+        // Register the /eco command (Admin commands)
         dispatcher.register(Commands.literal("eco")
                 .then(Commands.literal("give")
-                        .then(Commands.argument("target", net.minecraft.commands.arguments.EntityArgument.player())
+                        .then(Commands.argument("target", StringArgumentType.word())
+                        .suggests(PLAYER_SUGGESTIONS)
                         .then(Commands.argument("amount", com.mojang.brigadier.arguments.StringArgumentType.string())
                         .executes(context -> {
                             var source = context.getSource();
-                            var target = net.minecraft.commands.arguments.EntityArgument.getPlayer(context, "target");
+                            String targetName = StringArgumentType.getString(context, "target");
+                            UUID targetUuid = EconomyManager.getInstance().getUUIDByName(targetName);
+
+                            if (targetUuid == null) {
+                                source.sendFailure(Component.literal("Player not found!").withStyle(ChatFormatting.RED));
+                                return 0;
+                            }
                             
                             BigDecimal amount;
                             try {
@@ -89,17 +114,24 @@ public class ModEconomyCommands {
                                 return 0;
                             }
 
-                            EconomyManager.getInstance().addBalance(target.getUUID(), amount);
+                            EconomyManager.getInstance().addBalance(targetUuid, amount);
                             
-                            source.sendSuccess(() -> ModMessages.giveSuccess(target.getGameProfile().name(), amount), true);
+                            source.sendSuccess(() -> ModMessages.giveSuccess(targetName, amount), true);
                             return 1;
                         }))))
                 .then(Commands.literal("take")
-                        .then(Commands.argument("target", net.minecraft.commands.arguments.EntityArgument.player())
-                        .then(Commands.argument("amount", com.mojang.brigadier.arguments.StringArgumentType.string())
+                        .then(Commands.argument("target", StringArgumentType.word())
+                        .suggests(PLAYER_SUGGESTIONS)
+                        .then(Commands.argument("amount", StringArgumentType.string())
                         .executes(context -> {
                             var source = context.getSource();
-                            var target = net.minecraft.commands.arguments.EntityArgument.getPlayer(context, "target");
+                            String targetName = StringArgumentType.getString(context, "target");
+                            UUID targetUuid = EconomyManager.getInstance().getUUIDByName(targetName);
+
+                            if (targetUuid == null) {
+                                source.sendFailure(Component.literal("Player not found!").withStyle(ChatFormatting.RED));
+                                return 0;
+                            }
                             
                             BigDecimal amount;
                             try {
@@ -110,17 +142,24 @@ public class ModEconomyCommands {
                                 return 0;
                             }
 
-                            EconomyManager.getInstance().removeBalance(target.getUUID(), amount);
+                            EconomyManager.getInstance().removeBalance(targetUuid, amount);
                             
-                            source.sendSuccess(() -> ModMessages.takeSuccess(target.getGameProfile().name(), amount), true);
+                            source.sendSuccess(() -> ModMessages.takeSuccess(targetName, amount), true);
                             return 1;
                         }))))
                 .then(Commands.literal("set")
-                        .then(Commands.argument("target", net.minecraft.commands.arguments.EntityArgument.player())
-                        .then(Commands.argument("amount", com.mojang.brigadier.arguments.StringArgumentType.string())
+                        .then(Commands.argument("target", StringArgumentType.word())
+                        .suggests(PLAYER_SUGGESTIONS)
+                        .then(Commands.argument("amount", StringArgumentType.string())
                         .executes(context -> {
                             var source = context.getSource();
-                            var target = net.minecraft.commands.arguments.EntityArgument.getPlayer(context, "target");
+                            String targetName = StringArgumentType.getString(context, "target");
+                            UUID targetUuid = EconomyManager.getInstance().getUUIDByName(targetName);
+
+                            if (targetUuid == null) {
+                                source.sendFailure(Component.literal("Player not found!").withStyle(ChatFormatting.RED));
+                                return 0;
+                            }
                             
                             BigDecimal amount;
                             try {
@@ -131,9 +170,9 @@ public class ModEconomyCommands {
                                 return 0;
                             }
 
-                            EconomyManager.getInstance().setBalance(target.getUUID(), amount);
+                            EconomyManager.getInstance().setBalance(targetUuid, amount);
                             
-                            source.sendSuccess(() -> ModMessages.setSuccess(target.getGameProfile().name(), amount), true);
+                            source.sendSuccess(() -> ModMessages.setSuccess(targetName, amount), true);
                             return 1;
                         })))));
     }

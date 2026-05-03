@@ -101,6 +101,15 @@ public class EconomyManager {
         return data != null ? data.balance() : getConfig().getDefaultBalance();
     }
 
+    public UUID getUUIDByName(String name) {
+        if (name == null) return null;
+        return reverseCache.get(name.toLowerCase());
+    }
+
+    public java.util.Collection<String> getAllNames() {
+        return reverseCache.keySet();
+    }
+
     public boolean transfer(UUID from, UUID to, BigDecimal amount) {
         if (from.equals(to) || amount.compareTo(BigDecimal.ZERO) <= 0) return false;
 
