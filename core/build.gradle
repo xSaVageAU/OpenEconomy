@@ -20,4 +20,7 @@ dependencies {
 
 	// Common Economy API
 	include(api("eu.pb4:common-economy-api:2.0.0"))
+
+	// High-performance caching
+	include(implementation("com.github.ben-manes.caffeine:caffeine:3.1.8"))
 }
