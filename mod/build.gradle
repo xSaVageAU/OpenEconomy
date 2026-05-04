@@ -16,4 +16,5 @@ loom {
 dependencies {
 	implementation project(":core")
 	include project(":core") // Bundle the engine with the implementation
+	include project(":addons:json") // Bundle JSON storage as the default provider
 }

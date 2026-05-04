@@ -15,9 +15,6 @@ loom {
 }
 
 dependencies {
-	// Built-in JSON storage provider (bundled via JiJ)
-	include(project(":addons:json"))
-
 	// Common Economy API
 	include(api("eu.pb4:common-economy-api:2.0.0"))
 

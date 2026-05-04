@@ -41,13 +41,8 @@ public class StorageRegistry {
         Supplier<EconomyStorage> supplier = PROVIDERS.get(name.toLowerCase());
         
         if (supplier == null) {
-            OpenEconomy.LOGGER.warn("Storage provider '{}' not found, falling back to 'json'", name);
-            supplier = PROVIDERS.get("json");
-        }
-
-        if (supplier == null) {
-            throw new IllegalStateException("No storage provider found for 'json'! " +
-                    "Ensure the core mod or an addon providing 'json' storage is installed.");
+            throw new IllegalStateException("Storage provider '" + name + "' not found! " +
+                    "Ensure the required storage addon (JSON, NATS, etc.) is installed and registered.");
         }
 
         return supplier.get();
