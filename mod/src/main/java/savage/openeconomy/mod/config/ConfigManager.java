@@ -26,9 +26,11 @@ public class ConfigManager {
             } catch (IOException e) {
                 OpenEconomyMod.LOGGER.error("Failed to load configuration!", e);
             }
-        } else {
-            save();
         }
+        
+        // Always save at startup to ensure any new fields added in mod updates
+        // are written back to the file with their default values.
+        save();
     }
 
     public static void save() {

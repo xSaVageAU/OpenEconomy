@@ -33,6 +33,11 @@ public class EconomyMessages {
                 .append(Component.literal(CurrencyFormatter.format(newBalance)).withStyle(ChatFormatting.YELLOW))
                 .append(Component.literal(")").withStyle(ChatFormatting.GRAY));
 
-        player.sendSystemMessage(message);
+        var mode = savage.openeconomy.core.EconomyManager.getConfig().getNotificationMode();
+        if (mode == savage.openeconomy.core.EconomyCoreConfig.NotificationMode.ACTION_BAR) {
+            player.sendSystemMessage(message, true);
+        } else {
+            player.sendSystemMessage(message);
+        }
     }
 }

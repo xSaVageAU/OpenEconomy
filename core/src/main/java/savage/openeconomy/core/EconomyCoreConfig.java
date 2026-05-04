@@ -23,6 +23,18 @@ public interface EconomyCoreConfig {
         return false;
     }
 
+    /**
+     * Where to display the balance update notification.
+     */
+    default NotificationMode getNotificationMode() {
+        return NotificationMode.ACTION_BAR;
+    }
+
+    enum NotificationMode {
+        CHAT,
+        ACTION_BAR
+    }
+
     // Technical constants that shouldn't change
     default String getProviderId() { return "open_economy"; }
     default String getCurrencyId() { return "dollar"; }

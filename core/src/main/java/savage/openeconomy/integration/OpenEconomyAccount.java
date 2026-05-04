@@ -5,12 +5,9 @@ import eu.pb4.common.economy.api.EconomyAccount;
 import eu.pb4.common.economy.api.EconomyCurrency;
 import eu.pb4.common.economy.api.EconomyProvider;
 import eu.pb4.common.economy.api.EconomyTransaction;
-import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.level.ServerPlayer;
 import savage.openeconomy.core.EconomyManager;
-import savage.openeconomy.OpenEconomy;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -75,7 +72,6 @@ public class OpenEconomyAccount implements EconomyAccount {
         BigInteger current = balance();
         BigInteger next = current.add(value);
         setBalance(next);
-        sendFeedback(value, true);
         return new EconomyTransaction.Simple(true, Component.literal("Success"), next, current, value, this);
     }
 
@@ -85,7 +81,6 @@ public class OpenEconomyAccount implements EconomyAccount {
         if (current.compareTo(value) >= 0) {
             BigInteger next = current.subtract(value);
             setBalance(next);
-            sendFeedback(value, false);
             return new EconomyTransaction.Simple(true, Component.literal("Success"), next, current, value.negate(), this);
         }
         return new EconomyTransaction.Simple(false, Component.literal("Insufficient funds"), current, current, value.negate(), this);
@@ -104,26 +99,5 @@ public class OpenEconomyAccount implements EconomyAccount {
             return new EconomyTransaction.Simple(true, Component.literal("Success"), current.subtract(value), current, value.negate(), this);
         }
         return new EconomyTransaction.Simple(false, Component.literal("Insufficient funds"), current, current, value.negate(), this);
-    }
-
-    private void sendFeedback(BigInteger rawValue, boolean isIncrease) {
-        var server = OpenEconomy.getServer();
-        if (server == null) return;
-
-        ServerPlayer player = server.getPlayerList().getPlayer(profile.id());
-        if (player == null) return;
-
-        String formatted = currency instanceof OpenEconomyCurrency oec
-                ? oec.formatValue(rawValue, true)
-                : rawValue.toString();
-
-        ChatFormatting color = isIncrease ? ChatFormatting.GREEN : ChatFormatting.RED;
-        String prefix = isIncrease ? "+" : "-";
-
-        Component message = Component.empty()
-                .append(Component.literal("[Economy] ").withStyle(ChatFormatting.YELLOW))
-                .append(Component.literal(prefix + formatted).withStyle(color));
-
-        server.execute(() -> player.sendSystemMessage(message, true));
     }
 }

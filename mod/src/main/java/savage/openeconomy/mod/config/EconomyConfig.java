@@ -13,8 +13,18 @@ public class EconomyConfig implements EconomyCoreConfig {
     public String messagingType = "none";
     public int economyScale = 100;
     public boolean enableDiffMessages = true;
+    public String notificationMode = "ACTION_BAR";
 
     private transient BigDecimal cachedDefaultBalance;
+
+    @Override
+    public NotificationMode getNotificationMode() {
+        try {
+            return NotificationMode.valueOf(notificationMode.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return NotificationMode.CHAT;
+        }
+    }
 
     @Override
     public boolean isDiffMessageEnabled(java.util.UUID uuid) {
