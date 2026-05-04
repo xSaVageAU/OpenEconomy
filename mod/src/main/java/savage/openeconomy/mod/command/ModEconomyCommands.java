@@ -60,6 +60,8 @@ public class ModEconomyCommands {
         var source = context.getSource();
         var player = source.getPlayerOrException();
         
+        // TODO: Check permissions (e.g. openeconomy.command.balance)
+        
         var balance = EconomyManager.getInstance().getBalance(player.getUUID());
         source.sendSuccess(() -> Component.empty()
                 .append(Component.literal("Your balance: ").withStyle(ChatFormatting.GRAY))
@@ -71,6 +73,8 @@ public class ModEconomyCommands {
     private static int executePay(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         var source = context.getSource();
         var sender = source.getPlayerOrException();
+        
+        // TODO: Check permissions (e.g. openeconomy.command.pay)
         
         String targetName = StringArgumentType.getString(context, "target");
         UUID targetUuid = resolveTarget(context);
@@ -99,6 +103,9 @@ public class ModEconomyCommands {
 
     private static int executeGive(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         var source = context.getSource();
+        
+        // TODO: Check permissions (e.g. openeconomy.command.admin.give)
+        
         String targetName = StringArgumentType.getString(context, "target");
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
@@ -115,6 +122,9 @@ public class ModEconomyCommands {
 
     private static int executeTake(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         var source = context.getSource();
+        
+        // TODO: Check permissions (e.g. openeconomy.command.admin.take)
+        
         String targetName = StringArgumentType.getString(context, "target");
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
@@ -131,6 +141,9 @@ public class ModEconomyCommands {
 
     private static int executeSet(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         var source = context.getSource();
+        
+        // TODO: Check permissions (e.g. openeconomy.command.admin.set)
+        
         String targetName = StringArgumentType.getString(context, "target");
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
