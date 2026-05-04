@@ -102,6 +102,13 @@ public class EconomyManager {
         return data != null ? data.balance() : getConfig().getDefaultBalance();
     }
 
+    /**
+     * Gets the balance asynchronously, ensuring we wait for any pending storage loads.
+     */
+    public CompletableFuture<BigDecimal> getBalanceAsync(UUID uuid) {
+        return cache.get(uuid).thenApply(data -> data != null ? data.balance() : getConfig().getDefaultBalance());
+    }
+
     public UUID getUUIDByName(String name) {
         return cache.getUUIDByName(name);
     }

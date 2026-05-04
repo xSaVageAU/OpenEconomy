@@ -92,18 +92,15 @@ public class TransactionManager {
 
             AccountData updated = new AccountData(current.name(), clamped, current.revision());
             
+            // Optimistic update: update cache immediately so subsequent reads see the new balance
+            cache.put(uuid, updated);
+            
             return storage.saveAccount(uuid, updated).thenCompose(success -> {
                 if (success) {
-                    Lock lock = locks.get(uuid);
-                    lock.lock();
-                    try {
-                        cache.put(uuid, updated);
-                    } finally {
-                        lock.unlock();
-                    }
                     publishAndNotify(uuid, current, updated);
                     return CompletableFuture.completedFuture(true);
                 } else {
+                    // Rollback cache on failure
                     cache.invalidate(uuid);
                     return setBalance(uuid, amount, retry + 1);
                 }
@@ -123,18 +120,15 @@ public class TransactionManager {
 
             AccountData updated = new AccountData(current.name(), current.balance().add(amount).min(MAX_BALANCE), current.revision());
             
+            // Optimistic update
+            cache.put(uuid, updated);
+            
             return storage.saveAccount(uuid, updated).thenCompose(success -> {
                 if (success) {
-                    Lock lock = locks.get(uuid);
-                    lock.lock();
-                    try {
-                        cache.put(uuid, updated);
-                    } finally {
-                        lock.unlock();
-                    }
                     publishAndNotify(uuid, current, updated);
                     return CompletableFuture.completedFuture(true);
                 } else {
+                    // Rollback cache on failure
                     cache.invalidate(uuid);
                     return addBalance(uuid, amount, retry + 1);
                 }
@@ -155,18 +149,15 @@ public class TransactionManager {
 
             AccountData updated = new AccountData(current.name(), current.balance().subtract(amount), current.revision());
             
+            // Optimistic update
+            cache.put(uuid, updated);
+            
             return storage.saveAccount(uuid, updated).thenCompose(success -> {
                 if (success) {
-                    Lock lock = locks.get(uuid);
-                    lock.lock();
-                    try {
-                        cache.put(uuid, updated);
-                    } finally {
-                        lock.unlock();
-                    }
                     publishAndNotify(uuid, current, updated);
                     return CompletableFuture.completedFuture(true);
                 } else {
+                    // Rollback cache on failure
                     cache.invalidate(uuid);
                     return removeBalance(uuid, amount, retry + 1);
                 }
