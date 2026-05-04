@@ -84,10 +84,8 @@ public class EconomyManager {
 
         // Load existing data into memory (optional, but good for hot-starting)
         storage.loadAllAccounts().thenAccept(accounts -> {
-            accounts.forEach((uuid, data) -> {
-                cache.put(uuid, CompletableFuture.completedFuture(data));
-                reverseCache.put(data.name().toLowerCase(), uuid);
-            });
+            cache.synchronous().putAll(accounts);
+            accounts.forEach((uuid, data) -> reverseCache.put(data.name().toLowerCase(), uuid));
         }).join();
 
         messaging.subscribe(update -> updateCacheInternally(update.uuid(), update.data()));
@@ -106,7 +104,7 @@ public class EconomyManager {
             }
             reverseCache.put(newData.name().toLowerCase(), uuid);
             
-            cache.put(uuid, CompletableFuture.completedFuture(newData));
+            cache.synchronous().put(uuid, newData);
         } finally {
             lock.unlock();
         }
@@ -155,8 +153,8 @@ public class EconomyManager {
                     fromState[1] = new AccountData(f.name(), f.balance().subtract(amount), f.revision());
                     toState[1] = new AccountData(t.name(), t.balance().add(amount).min(MAX_BALANCE), t.revision());
 
-                    cache.put(from, CompletableFuture.completedFuture(fromState[1]));
-                    cache.put(to, CompletableFuture.completedFuture(toState[1]));
+                    cache.synchronous().put(from, fromState[1]);
+                    cache.synchronous().put(to, toState[1]);
                     success[0] = true;
                 }
             });
@@ -222,7 +220,7 @@ public class EconomyManager {
                     Lock lock = locks.get(uuid);
                     lock.lock();
                     try {
-                        cache.put(uuid, CompletableFuture.completedFuture(updated));
+                        cache.synchronous().put(uuid, updated);
                     } finally {
                         lock.unlock();
                     }
@@ -253,7 +251,7 @@ public class EconomyManager {
                     Lock lock = locks.get(uuid);
                     lock.lock();
                     try {
-                        cache.put(uuid, CompletableFuture.completedFuture(updated));
+                        cache.synchronous().put(uuid, updated);
                     } finally {
                         lock.unlock();
                     }
@@ -285,7 +283,7 @@ public class EconomyManager {
                     Lock lock = locks.get(uuid);
                     lock.lock();
                     try {
-                        cache.put(uuid, CompletableFuture.completedFuture(updated));
+                        cache.synchronous().put(uuid, updated);
                     } finally {
                         lock.unlock();
                     }
@@ -309,7 +307,7 @@ public class EconomyManager {
                     AccountData updated = new AccountData(name, existing.balance(), existing.revision());
                     reverseCache.invalidate(existing.name().toLowerCase());
                     reverseCache.put(name.toLowerCase(), uuid);
-                    cache.put(uuid, CompletableFuture.completedFuture(updated));
+                    cache.synchronous().put(uuid, updated);
                     return storage.saveAccount(uuid, updated).thenApply(v -> updated);
                 }
                 return CompletableFuture.completedFuture(existing);
@@ -331,7 +329,7 @@ public class EconomyManager {
                 Lock l = locks.get(uuid);
                 l.lock();
                 try {
-                    cache.put(uuid, CompletableFuture.completedFuture(finalResult));
+                    cache.synchronous().put(uuid, finalResult);
                     if (name != null) reverseCache.put(name.toLowerCase(), uuid);
                 } finally {
                     l.unlock();
@@ -346,6 +344,10 @@ public class EconomyManager {
         setBalance(uuid, getConfig().getDefaultBalance());
     }
 
+    /**
+     * Gets top accounts CURRENTLY in the memory cache.
+     * Note: This does not query the entire storage for all offline players.
+     */
     public List<AccountData> getTopAccounts(int limit) {
         return cache.synchronous().asMap().values().stream()
                 .sorted((a, b) -> b.balance().compareTo(a.balance()))
