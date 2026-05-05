@@ -34,6 +34,10 @@ public interface EconomyCoreConfig {
         return 10;
     }
 
+    default int getShutdownTimeoutSeconds() {
+        return 10;
+    }
+
     /**
      * Whether the engine should automatically send balance update notifications (diff messages) to the player.
      */
