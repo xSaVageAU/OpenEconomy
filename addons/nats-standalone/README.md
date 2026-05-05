@@ -29,6 +29,20 @@ To use the standalone provider, set both storage and messaging types to `nats-st
 }
 ```
 
+### Registration (`fabric.mod.json`)
+The standalone addon registers both a storage and a messaging provider. If you are building a similar unified provider:
+
+```json
+"entrypoints": {
+  "openeconomy:storage": [
+    "savage.openeconomy.nats.standalone.storage.NatsStandaloneStorageProvider"
+  ],
+  "openeconomy:messaging": [
+    "savage.openeconomy.nats.standalone.messaging.NatsStandaloneMessagingProvider"
+  ]
+}
+```
+
 ## Configuration
 
 The configuration is located at `config/open-economy/nats-standalone.yml`.
@@ -53,3 +67,11 @@ Account data is stored as JSON-encoded packets in the KV bucket, using the playe
   "revision": 42
 }
 ```
+
+## Building Your Own
+If you want to build a "Standalone" unified provider (e.g., using Redis Streams/KV or MongoDB Change Streams):
+1.  **Unified Logic**: Implement both `EconomyStorage` and `EconomyMessaging`.
+2.  **Shared State**: Usually, these providers use a single database connection (like NATS JetStream) and trigger messaging updates by watching for database changes (e.g., KV Watchers).
+3.  **Registration**: Register two separate provider classes in your `fabric.mod.json` (one for `openeconomy:storage` and one for `openeconomy:messaging`), but have them share the same underlying connection or service.
+4.  **Loop Prevention**: Always include a `serverId` in your stored data so that the watcher can ignore updates that originated from the local server.
+

@@ -27,14 +27,26 @@ To use this addon, register it in your main OpenEconomy `config.json`:
 }
 ```
 
+### Registration (`fabric.mod.json`)
+The addon is discovered by the core engine via the `openeconomy:messaging` entrypoint. If you are examining this as a reference:
+
+```json
+"entrypoints": {
+  "openeconomy:messaging": [
+    "savage.openeconomy.nats.messaging.NatsMessagingProvider"
+  ]
+}
+```
+
 ## Configuration
+
+The configuration is located at `config/open-economy/nats.yml`.
+
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `natsUrl` | `nats://localhost:4222` | The URL of your NATS server. |
 | `authToken` | `""` | Optional authentication token for the NATS server. |
 | `subject` | `openeconomy.accounts` | The base subject for broadcast messages. |
-
-The configuration is located at `config/open-economy/nats.yml`.
 
 *Note: `serverId` is generated automatically as a random UUID on every startup to prevent message loops.*
 
@@ -51,3 +63,13 @@ Updates are broadcasted as JSON-encoded packets:
   "revision": 42
 }
 ```
+
+## Building Your Own
+If you want to build a messaging provider for a different service (e.g., Redis Pub/Sub, RabbitMQ, or Velocity/Bungee Plugin Messaging):
+1.  **Project Structure**: Copy the structure of this project.
+2.  **Implementation**: 
+    *   Implement the `EconomyMessaging` interface for the core logic (publishing/subscribing).
+    *   Implement the `MessagingProvider` interface for registration.
+3.  **Registration**: Add your provider class to your `fabric.mod.json` under the `openeconomy:messaging` entrypoint.
+4.  **Integration**: Ensure your implementation broadcasts JSON packets containing the current server ID to avoid infinite loops and uses the `AccountData` revision for consistency.
+
