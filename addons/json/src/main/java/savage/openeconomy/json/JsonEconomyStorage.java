@@ -58,19 +58,16 @@ public class JsonEconomyStorage implements EconomyStorage {
                 if (Files.exists(file)) {
                     try (var reader = Files.newBufferedReader(file)) {
                         AccountData existing = GSON.fromJson(reader, AccountData.class);
-                        if (existing != null && existing.revision() != data.revision()) {
+                        if (existing != null && existing.revision() >= data.revision()) {
                             OpenEconomy.LOGGER.warn("Revision mismatch for {}: expected {}, found {}", uuid, data.revision(), existing.revision());
                             return false; // Collision!
                         }
                     }
                 }
 
-                // Increment revision for the new save
-                AccountData toSave = new AccountData(data.name(), data.balance(), data.revision() + 1);
-
                 // Atomic save: write to .tmp then move
                 try (var writer = Files.newBufferedWriter(tempFile)) {
-                    GSON.toJson(toSave, writer);
+                    GSON.toJson(data, writer);
                 }
                 Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
                 return true;

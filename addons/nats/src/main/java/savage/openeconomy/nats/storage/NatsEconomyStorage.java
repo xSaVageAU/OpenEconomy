@@ -62,9 +62,7 @@ public class NatsEconomyStorage implements EconomyStorage {
             try {
                 KeyValueEntry entry = kv.get(uuid.toString());
                 if (entry == null) return null;
-                AccountData data = deserialize(entry.getValueAsString());
-                // Store the NATS revision for optimistic locking
-                return new AccountData(data.name(), data.balance(), entry.getRevision());
+                return deserialize(entry.getValueAsString());
             } catch (Exception e) {
                 LOGGER.error("Failed to load account {} from KV: {}", uuid, e.getMessage());
                 return null;
@@ -79,23 +77,18 @@ public class NatsEconomyStorage implements EconomyStorage {
                 byte[] value = serialize(data);
                 String key = uuid.toString();
                 
-                if (data.revision() <= 0) {
-                    // New account: use create() which fails if the key already exists
-                    try {
-                        kv.create(key, value);
-                        return true;
-                    } catch (io.nats.client.JetStreamApiException e) {
-                        return false; // Key collision
-                    }
-                } else {
-                    // Existing account: use update() which fails if the sequence doesn't match
-                    try {
-                        kv.update(key, value, data.revision());
-                        return true;
-                    } catch (io.nats.client.JetStreamApiException e) {
-                        return false; // Revision mismatch (Optimistic Lock failure)
+                // Fetch existing to check revision (Optimistic Lock)
+                KeyValueEntry existing = kv.get(key);
+                if (existing != null) {
+                    AccountData existingData = deserialize(existing.getValueAsString());
+                    if (existingData.revision() >= data.revision()) {
+                        LOGGER.warn("Revision mismatch for {} (NATS): expected {}, found {}", uuid, data.revision(), existingData.revision());
+                        return false;
                     }
                 }
+
+                kv.put(key, value);
+                return true;
             } catch (Exception e) {
                 LOGGER.error("Failed to save account {} to KV: {}", uuid, e.getMessage());
                 return false;
@@ -155,17 +148,17 @@ public class NatsEconomyStorage implements EconomyStorage {
     }
 
     private byte[] serialize(AccountData data) {
-        return GSON.toJson(new AccountWire(data.name(), data.balance().toPlainString()))
+        return GSON.toJson(new AccountWire(data.name(), data.balance().toPlainString(), data.revision()))
                 .getBytes(StandardCharsets.UTF_8);
     }
 
     private AccountData deserialize(String json) {
         AccountWire wire = GSON.fromJson(json, AccountWire.class);
-        return new AccountData(wire.name, new BigDecimal(wire.balance));
+        return new AccountData(wire.name, new BigDecimal(wire.balance), wire.revision);
     }
 
     /**
      * Wire format for KV storage — avoids BigDecimal serialization quirks.
      */
-    private record AccountWire(String name, String balance) {}
+    private record AccountWire(String name, String balance, long revision) {}
 }

@@ -41,7 +41,8 @@ public class NatsEconomyMessaging implements EconomyMessaging {
                     NatsConnection.SERVER_ID,
                     uuid.toString(),
                     data.name(),
-                    data.balance().toPlainString()
+                    data.balance().toPlainString(),
+                    data.revision()
             );
             byte[] payload = GSON.toJson(wire).getBytes(StandardCharsets.UTF_8);
             connection.publish(subject + "." + uuid, payload);
@@ -62,7 +63,7 @@ public class NatsEconomyMessaging implements EconomyMessaging {
                 // Skip messages from this server
                 if (NatsConnection.SERVER_ID.equals(wire.serverId)) return;
 
-                AccountData data = new AccountData(wire.name, new BigDecimal(wire.balance));
+                AccountData data = new AccountData(wire.name, new BigDecimal(wire.balance), wire.revision);
                 listener.accept(new AccountUpdate(UUID.fromString(wire.uuid), data));
             } catch (Exception e) {
                 LOGGER.error("Failed to process incoming account update: {}", e.getMessage());
@@ -87,5 +88,5 @@ public class NatsEconomyMessaging implements EconomyMessaging {
     /**
      * Wire format for pub/sub messages — includes serverId for self-filtering.
      */
-    private record MessageWire(String serverId, String uuid, String name, String balance) {}
+    private record MessageWire(String serverId, String uuid, String name, String balance, long revision) {}
 }

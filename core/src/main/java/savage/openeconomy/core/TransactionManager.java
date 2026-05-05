@@ -47,8 +47,8 @@ public class TransactionManager {
                     fromState[0] = f;
                     toState[0] = t;
 
-                    fromState[1] = new AccountData(f.name(), f.balance().subtract(amount), f.revision());
-                    toState[1] = new AccountData(t.name(), t.balance().add(amount).min(MAX_BALANCE), t.revision());
+                    fromState[1] = new AccountData(f.name(), f.balance().subtract(amount), f.revision() + 1);
+                    toState[1] = new AccountData(t.name(), t.balance().add(amount).min(MAX_BALANCE), t.revision() + 1);
 
                     cache.put(from, fromState[1]);
                     cache.put(to, toState[1]);
@@ -64,10 +64,6 @@ public class TransactionManager {
                     }
                     return storage.saveAccount(to, toState[1]).thenApply(s2 -> {
                         if (s2) {
-                            // Update cache with the NEW revisions for both accounts
-                            cache.put(from, new AccountData(fromState[1].name(), fromState[1].balance(), fromState[1].revision() + 1));
-                            cache.put(to, new AccountData(toState[1].name(), toState[1].balance(), toState[1].revision() + 1));
-                            
                             publishAndNotify(from, fromState[0], fromState[1]);
                             publishAndNotify(to, toState[0], toState[1]);
                             return true;
@@ -94,7 +90,7 @@ public class TransactionManager {
         return cache.get(uuid).thenCompose(current -> {
             if (current == null) return CompletableFuture.completedFuture(false);
 
-            AccountData updated = new AccountData(current.name(), clamped, current.revision());
+            AccountData updated = new AccountData(current.name(), clamped, current.revision() + 1);
             
             // Optimistic update: update cache immediately so subsequent reads see the new balance
             cache.put(uuid, updated);
@@ -122,15 +118,13 @@ public class TransactionManager {
         return cache.get(uuid).thenCompose(current -> {
             if (current == null) return CompletableFuture.completedFuture(false);
 
-            AccountData updated = new AccountData(current.name(), current.balance().add(amount).min(MAX_BALANCE), current.revision());
+            AccountData updated = new AccountData(current.name(), current.balance().add(amount).min(MAX_BALANCE), current.revision() + 1);
             
             // Optimistic update
             cache.put(uuid, updated);
             
             return storage.saveAccount(uuid, updated).thenCompose(success -> {
                 if (success) {
-                    // Update cache with the NEW revision
-                    cache.put(uuid, new AccountData(updated.name(), updated.balance(), updated.revision() + 1));
                     publishAndNotify(uuid, current, updated);
                     return CompletableFuture.completedFuture(true);
                 } else {
@@ -153,7 +147,7 @@ public class TransactionManager {
             if (current == null || current.balance().compareTo(amount) < 0) 
                 return CompletableFuture.completedFuture(false);
 
-            AccountData updated = new AccountData(current.name(), current.balance().subtract(amount), current.revision());
+            AccountData updated = new AccountData(current.name(), current.balance().subtract(amount), current.revision() + 1);
             
             // Optimistic update
             cache.put(uuid, updated);
