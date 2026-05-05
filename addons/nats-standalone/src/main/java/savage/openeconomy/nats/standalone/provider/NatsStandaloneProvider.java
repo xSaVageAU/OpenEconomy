@@ -1,4 +1,4 @@
-package savage.openeconomy.nats.standalone;
+package savage.openeconomy.nats.standalone.provider;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -13,6 +13,8 @@ import savage.openeconomy.api.AccountData;
 import savage.openeconomy.api.EconomyMessaging;
 import savage.openeconomy.api.EconomyStorage;
 import savage.openeconomy.api.EconomyMessaging.AccountUpdate;
+import savage.openeconomy.nats.standalone.NatsConfig;
+import savage.openeconomy.nats.standalone.NatsConnection;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;

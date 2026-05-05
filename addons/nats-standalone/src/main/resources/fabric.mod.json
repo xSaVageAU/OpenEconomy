@@ -17,10 +17,10 @@
 			"savage.openeconomy.nats.standalone.OpenEconomyNatsStandalone"
 		],
 		"openeconomy:storage": [
-			"savage.openeconomy.nats.standalone.NatsStandaloneStorageProvider"
+			"savage.openeconomy.nats.standalone.storage.NatsStandaloneStorageProvider"
 		],
 		"openeconomy:messaging": [
-			"savage.openeconomy.nats.standalone.NatsStandaloneMessagingProvider"
+			"savage.openeconomy.nats.standalone.messaging.NatsStandaloneMessagingProvider"
 		]
 	},
 	"depends": {
