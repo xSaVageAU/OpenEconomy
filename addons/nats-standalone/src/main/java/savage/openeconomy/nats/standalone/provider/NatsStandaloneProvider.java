@@ -62,7 +62,7 @@ public class NatsStandaloneProvider implements EconomyStorage, EconomyMessaging 
     }
 
     @Override
-    public CompletableFuture<Boolean> saveAccount(UUID uuid, AccountData data) {
+    public CompletableFuture<savage.openeconomy.api.SaveStatus> saveAccount(UUID uuid, AccountData data) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 byte[] value = serialize(serverId, data);
@@ -72,15 +72,15 @@ public class NatsStandaloneProvider implements EconomyStorage, EconomyMessaging 
                 if (existing != null) {
                     AccountData existingData = deserialize(existing.getValueAsString());
                     if (existingData.revision() >= data.revision()) {
-                        return false;
+                        return savage.openeconomy.api.SaveStatus.VERSION_COLLISION;
                     }
                 }
 
                 kv.put(key, value);
-                return true;
+                return savage.openeconomy.api.SaveStatus.SUCCESS;
             } catch (Exception e) {
                 LOGGER.error("Failed to save account {} to KV: {}", uuid, e.getMessage());
-                return false;
+                return savage.openeconomy.api.SaveStatus.ERROR;
             }
         });
     }

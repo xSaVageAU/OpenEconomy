@@ -50,7 +50,7 @@ public class JsonEconomyStorage implements EconomyStorage {
     }
 
     @Override
-    public CompletableFuture<Boolean> saveAccount(UUID uuid, AccountData data) {
+    public CompletableFuture<savage.openeconomy.api.SaveStatus> saveAccount(UUID uuid, AccountData data) {
         return CompletableFuture.supplyAsync(() -> {
             Path file = storageDir.resolve(uuid.toString() + ".json");
             Path tempFile = storageDir.resolve(uuid.toString() + ".json.tmp");
@@ -63,7 +63,7 @@ public class JsonEconomyStorage implements EconomyStorage {
                         if (existing != null && existing.revision() >= data.revision()) {
                             OpenEconomy.LOGGER.warn("Revision mismatch for {}: expected {}, found {}", uuid,
                                     data.revision(), existing.revision());
-                            return false; // Collision!
+                            return savage.openeconomy.api.SaveStatus.VERSION_COLLISION; // Collision!
                         }
                     }
                 }
@@ -73,10 +73,10 @@ public class JsonEconomyStorage implements EconomyStorage {
                     GSON.toJson(data, writer);
                 }
                 Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-                return true;
+                return savage.openeconomy.api.SaveStatus.SUCCESS;
             } catch (IOException e) {
                 OpenEconomy.LOGGER.error("Failed to save account atomically for {}: {}", uuid, e.getMessage());
-                return false;
+                return savage.openeconomy.api.SaveStatus.ERROR;
             }
         });
     }

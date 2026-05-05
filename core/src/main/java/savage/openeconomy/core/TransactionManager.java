@@ -57,12 +57,12 @@ public class TransactionManager {
 
             if (success[0]) {
                 return storage.saveAccount(from, fromState[1]).thenCompose(s1 -> {
-                    if (!s1) {
+                    if (!s1.isSuccess()) {
                         cache.invalidate(from);
                         return CompletableFuture.completedFuture(false);
                     }
                     return storage.saveAccount(to, toState[1]).thenApply(s2 -> {
-                        if (s2) {
+                        if (s2.isSuccess()) {
                             publishAndNotify(from, fromState[0], fromState[1]);
                             publishAndNotify(to, toState[0], toState[1]);
                             return true;
@@ -95,7 +95,7 @@ public class TransactionManager {
             cache.put(uuid, updated);
             
             return storage.saveAccount(uuid, updated).thenCompose(success -> {
-                if (success) {
+                if (success.isSuccess()) {
                     publishAndNotify(uuid, current, updated);
                     return CompletableFuture.completedFuture(true);
                 } else {
@@ -123,7 +123,7 @@ public class TransactionManager {
             cache.put(uuid, updated);
             
             return storage.saveAccount(uuid, updated).thenCompose(success -> {
-                if (success) {
+                if (success.isSuccess()) {
                     publishAndNotify(uuid, current, updated);
                     return CompletableFuture.completedFuture(true);
                 } else {
@@ -152,7 +152,7 @@ public class TransactionManager {
             cache.put(uuid, updated);
             
             return storage.saveAccount(uuid, updated).thenCompose(success -> {
-                if (success) {
+                if (success.isSuccess()) {
                     publishAndNotify(uuid, current, updated);
                     return CompletableFuture.completedFuture(true);
                 } else {

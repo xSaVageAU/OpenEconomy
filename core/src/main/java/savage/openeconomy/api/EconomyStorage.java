@@ -13,7 +13,7 @@ public interface EconomyStorage {
     
     CompletableFuture<AccountData> loadAccount(UUID uuid);
 
-    CompletableFuture<Boolean> saveAccount(UUID uuid, AccountData data);
+    CompletableFuture<SaveStatus> saveAccount(UUID uuid, AccountData data);
 
     CompletableFuture<Boolean> deleteAccount(UUID uuid);
 
