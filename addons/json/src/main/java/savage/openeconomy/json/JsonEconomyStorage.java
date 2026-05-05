@@ -17,7 +17,8 @@ import java.util.stream.Stream;
 
 /**
  * Local JSON-based storage for OpenEconomy.
- * Stores each account in a separate file for better scalability and atomic saves.
+ * Stores each account in a separate file for better scalability and atomic
+ * saves.
  */
 public class JsonEconomyStorage implements EconomyStorage {
     private static final Gson GSON = new GsonBuilder().create();
@@ -36,7 +37,8 @@ public class JsonEconomyStorage implements EconomyStorage {
     public CompletableFuture<AccountData> loadAccount(UUID uuid) {
         return CompletableFuture.supplyAsync(() -> {
             Path file = storageDir.resolve(uuid.toString() + ".json");
-            if (!Files.exists(file)) return null;
+            if (!Files.exists(file))
+                return null;
 
             try (var reader = Files.newBufferedReader(file)) {
                 return GSON.fromJson(reader, AccountData.class);
@@ -59,7 +61,8 @@ public class JsonEconomyStorage implements EconomyStorage {
                     try (var reader = Files.newBufferedReader(file)) {
                         AccountData existing = GSON.fromJson(reader, AccountData.class);
                         if (existing != null && existing.revision() >= data.revision()) {
-                            OpenEconomy.LOGGER.warn("Revision mismatch for {}: expected {}, found {}", uuid, data.revision(), existing.revision());
+                            OpenEconomy.LOGGER.warn("Revision mismatch for {}: expected {}, found {}", uuid,
+                                    data.revision(), existing.revision());
                             return false; // Collision!
                         }
                     }
@@ -72,7 +75,7 @@ public class JsonEconomyStorage implements EconomyStorage {
                 Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
                 return true;
             } catch (IOException e) {
-                OpenEconomy.LOGGER.error("Failed to save account atomicly for {}: {}", uuid, e.getMessage());
+                OpenEconomy.LOGGER.error("Failed to save account atomically for {}: {}", uuid, e.getMessage());
                 return false;
             }
         });
@@ -95,7 +98,8 @@ public class JsonEconomyStorage implements EconomyStorage {
     public CompletableFuture<Map<UUID, AccountData>> loadAllAccounts() {
         return CompletableFuture.supplyAsync(() -> {
             Map<UUID, AccountData> accounts = new HashMap<>();
-            if (!Files.exists(storageDir)) return accounts;
+            if (!Files.exists(storageDir))
+                return accounts;
 
             try (Stream<Path> files = Files.list(storageDir)) {
                 files.filter(f -> f.toString().endsWith(".json")).forEach(file -> {
@@ -103,7 +107,8 @@ public class JsonEconomyStorage implements EconomyStorage {
                         String fileName = file.getFileName().toString();
                         UUID uuid = UUID.fromString(fileName.substring(0, fileName.length() - 5));
                         AccountData data = GSON.fromJson(reader, AccountData.class);
-                        if (data != null) accounts.put(uuid, data);
+                        if (data != null)
+                            accounts.put(uuid, data);
                     } catch (Exception e) {
                         OpenEconomy.LOGGER.error("Failed to load account file {}: {}", file, e.getMessage());
                     }
