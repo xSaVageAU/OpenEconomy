@@ -21,6 +21,8 @@ public class AccountCache {
     private final Cache<String, UUID> nameToUuid;
     
     private volatile List<AccountData> topAccountsCache = List.of();
+    private final java.util.Set<UUID> topUuidCache = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private java.math.BigDecimal leaderboardCutoff = java.math.BigDecimal.ZERO;
     private long lastTopAccountsUpdate = 0;
 
     public AccountCache(EconomyStorage storage) {
@@ -57,6 +59,11 @@ public class AccountCache {
     public void put(UUID uuid, AccountData data) {
         cache.synchronous().put(uuid, data);
         nameToUuid.put(data.name().toLowerCase(), uuid);
+
+        // Smart Invalidation: If they are already in the top or just broke into it, force a refresh
+        if (topUuidCache.contains(uuid) || data.balance().compareTo(leaderboardCutoff) >= 0) {
+            lastTopAccountsUpdate = 0;
+        }
     }
 
     public void putAll(Map<UUID, AccountData> accounts) {
@@ -90,10 +97,28 @@ public class AccountCache {
         int maxTop = EconomyManager.getConfig().getLeaderboardSize();
 
         if (now - lastTopAccountsUpdate > cacheMillis || topAccountsCache.isEmpty()) {
-            topAccountsCache = cache.synchronous().asMap().values().stream()
+            var allAccounts = cache.synchronous().asMap();
+            topAccountsCache = allAccounts.values().stream()
                     .sorted((a, b) -> b.balance().compareTo(a.balance()))
                     .limit(maxTop)
                     .toList();
+            
+            // Update tracking markers for smart invalidation
+            topUuidCache.clear();
+            if (!topAccountsCache.isEmpty()) {
+                leaderboardCutoff = topAccountsCache.get(topAccountsCache.size() - 1).balance();
+                // We need to find the UUIDs for these accounts.
+                // Since AccountData doesn't store UUID, we look through the map.
+                // This is O(N) but only happens once every 60s (or on smart refresh).
+                for (var entry : allAccounts.entrySet()) {
+                    if (topAccountsCache.contains(entry.getValue())) {
+                        topUuidCache.add(entry.getKey());
+                    }
+                }
+            } else {
+                leaderboardCutoff = java.math.BigDecimal.ZERO;
+            }
+            
             lastTopAccountsUpdate = now;
         }
         
