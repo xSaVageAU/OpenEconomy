@@ -101,24 +101,30 @@ public class NatsStandaloneProvider implements EconomyStorage, EconomyMessaging 
     public CompletableFuture<Map<UUID, AccountData>> loadAllAccounts() {
         return CompletableFuture.supplyAsync(() -> {
             Map<UUID, AccountData> accounts = new HashMap<>();
+            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
             try {
-                List<String> keys;
-                try {
-                    keys = kv.keys();
-                } catch (Exception e) {
-                    return accounts;
-                }
+                var sub = kv.watchAll(new io.nats.client.api.KeyValueWatcher() {
+                    @Override
+                    public void watch(io.nats.client.api.KeyValueEntry entry) {
+                        byte[] value = entry.getValue();
+                        if (value == null) return;
+                        try {
+                            accounts.put(UUID.fromString(entry.getKey()), deserialize(new String(value, StandardCharsets.UTF_8)));
+                        } catch (Exception ignored) {}
+                    }
 
-                for (String key : keys) {
-                    try {
-                        KeyValueEntry entry = kv.get(key);
-                        if (entry != null) {
-                            accounts.put(UUID.fromString(key), deserialize(entry.getValueAsString()));
-                        }
-                    } catch (Exception ignored) {}
+                    @Override
+                    public void endOfData() {
+                        latch.countDown();
+                    }
+                });
+
+                if (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                    LOGGER.warn("NATS loadAllAccounts timed out waiting for initial data");
                 }
+                sub.close();
             } catch (Exception e) {
-                LOGGER.error("Failed to load all accounts: {}", e.getMessage());
+                LOGGER.error("Failed to stream all accounts from NATS: {}", e.getMessage());
             }
             return accounts;
         });

@@ -30,6 +30,8 @@ public class EconomyManager {
     private TransactionManager transactions;
     private EconomyStorage storage;
     private EconomyMessaging messaging;
+    private final java.util.concurrent.CompletableFuture<Void> readyFuture = new java.util.concurrent.CompletableFuture<>();
+    private final java.util.Queue<savage.openeconomy.api.EconomyMessaging.AccountUpdate> warmupQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
 
     private EconomyManager() {
     }
@@ -69,21 +71,40 @@ public class EconomyManager {
         // 5. Register with Common Economy API
         CommonEconomy.register(cfg.getProviderId(), OpenEconomyProvider.INSTANCE);
 
-        // 6. Pre-load data (optional)
+        // 6. Pre-load data asynchronously
         storage.loadAllAccounts().thenAccept(accounts -> {
             cache.putAll(accounts);
+            
+            // Apply queued updates received during warmup
+            while (!warmupQueue.isEmpty()) {
+                var update = warmupQueue.poll();
+                if (update != null) {
+                    updateCacheInternally(update.uuid(), update.data());
+                }
+            }
+
+            readyFuture.complete(null);
             
             long bytes = cache.estimateMemorySize();
             String sizeStr = formatBytes(bytes);
             OpenEconomy.LOGGER.info("OpenEconomy Core ready. Pre-loaded {} accounts into cache (Est. Memory: {}).", accounts.size(), sizeStr);
-        }).join();
+        }).exceptionally(ex -> {
+            OpenEconomy.LOGGER.error("Failed to pre-load economy data!", ex);
+            readyFuture.complete(null); // Allow server to continue, but with empty/partial cache
+            return null;
+        });
 
         // 7. Subscribe to cross-server updates
         messaging.subscribe(update -> {
             if (update.sourceServerId().equals(OpenEconomy.getServerId())) {
                 return; // Ignore updates originated from this server
             }
-            updateCacheInternally(update.uuid(), update.data());
+
+            if (!readyFuture.isDone()) {
+                warmupQueue.add(update);
+            } else {
+                updateCacheInternally(update.uuid(), update.data());
+            }
         });
     }
 
@@ -154,23 +175,23 @@ public class EconomyManager {
     }
 
     public CompletableFuture<Boolean> transfer(UUID from, UUID to, BigDecimal amount) {
-        return transactions.transfer(from, to, amount);
+        return readyFuture.thenCompose(v -> transactions.transfer(from, to, amount));
     }
 
     public CompletableFuture<Boolean> setBalance(UUID uuid, BigDecimal amount) {
-        return transactions.setBalance(uuid, amount);
+        return readyFuture.thenCompose(v -> transactions.setBalance(uuid, amount));
     }
 
     public CompletableFuture<Boolean> addBalance(UUID uuid, BigDecimal amount) {
-        return transactions.addBalance(uuid, amount);
+        return readyFuture.thenCompose(v -> transactions.addBalance(uuid, amount));
     }
 
     public CompletableFuture<Boolean> removeBalance(UUID uuid, BigDecimal amount) {
-        return transactions.removeBalance(uuid, amount);
+        return readyFuture.thenCompose(v -> transactions.removeBalance(uuid, amount));
     }
 
     public CompletableFuture<AccountData> getOrCreateAccount(UUID uuid, String name) {
-        return transactions.updateNameOrGet(uuid, name);
+        return readyFuture.thenCompose(v -> transactions.updateNameOrGet(uuid, name));
     }
 
     public void resetBalance(UUID uuid) {
