@@ -32,6 +32,12 @@ public class ModEconomyCommands {
         dispatcher.register(Commands.literal("balance")
                 .executes(ModEconomyCommands::executeBalance));
 
+        // Register /baltop and /balancetop
+        dispatcher.register(Commands.literal("baltop")
+                .executes(ModEconomyCommands::executeBalanceTop));
+        dispatcher.register(Commands.literal("balancetop")
+                .executes(ModEconomyCommands::executeBalanceTop));
+
         // Register the /pay command
         dispatcher.register(Commands.literal("pay")
                 .then(Commands.argument("target", StringArgumentType.word())
@@ -69,6 +75,29 @@ public class ModEconomyCommands {
                 .append(Component.literal("Your balance: ").withStyle(ChatFormatting.GRAY))
                 .append(Component.literal(CurrencyFormatter.format(balance)).withStyle(ChatFormatting.YELLOW)), false);
         
+        return 1;
+    }
+
+    private static int executeBalanceTop(CommandContext<CommandSourceStack> context) {
+        var source = context.getSource();
+        int limit = EconomyManager.getConfig().getLeaderboardSize();
+        var top = EconomyManager.getInstance().getTopAccounts(limit);
+        
+        if (top.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("No accounts found.").withStyle(ChatFormatting.RED), false);
+            return 1;
+        }
+
+        source.sendSuccess(() -> {
+            var text = Component.empty().append(ModMessages.balanceTopHeader());
+            int rank = 1;
+            for (var entry : top) {
+                text.append(Component.literal("\n")).append(ModMessages.balanceTopEntry(rank, entry.name(), entry.balance()));
+                rank++;
+            }
+            return text;
+        }, false);
+
         return 1;
     }
 

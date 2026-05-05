@@ -54,4 +54,19 @@ public class ModMessages {
                 .append(Component.literal(CurrencyFormatter.format(amount)).withStyle(ChatFormatting.GOLD))
                 .append(Component.literal(".").withStyle(ChatFormatting.GRAY));
     }
+
+    public static Component balanceTopHeader() {
+        return Component.empty()
+                .append(Component.literal("--- ").withStyle(ChatFormatting.DARK_GRAY))
+                .append(Component.literal("Top Balances").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD))
+                .append(Component.literal(" ---").withStyle(ChatFormatting.DARK_GRAY));
+    }
+
+    public static Component balanceTopEntry(int rank, String name, BigDecimal amount) {
+        return Component.empty()
+                .append(Component.literal(rank + ". ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(name).withStyle(ChatFormatting.WHITE))
+                .append(Component.literal(": ").withStyle(ChatFormatting.GRAY))
+                .append(Component.literal(CurrencyFormatter.format(amount)).withStyle(ChatFormatting.YELLOW));
+    }
 }
