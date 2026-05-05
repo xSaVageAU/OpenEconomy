@@ -7,7 +7,7 @@
 	"authors": [
 		"Savage"
 	],
-	"license": "MIT",
+	"license": "CC0-1.0",
 	"environment": "*",
 	"entrypoints": {
 		"openeconomy:storage": [

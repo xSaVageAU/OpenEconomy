@@ -39,3 +39,8 @@ If you want to build a provider for a different database (e.g., MySQL, MongoDB, 
 2.  Implement the `EconomyStorage` interface (and `StorageProvider` for the entrypoint).
 3.  Register your provider class in your `fabric.mod.json` under the `openeconomy:storage` entrypoint.
 
+
+## License
+This addon is licensed under **CC0-1.0** (Public Domain). See the shared [LICENSE](../LICENSE) file for the full legal text. You are free to copy, modify, and distribute this code as a template for your own storage providers without any restrictions or attribution requirements.
+
+*Note: The OpenEconomy core project remains under the MIT license.*

@@ -75,3 +75,8 @@ If you want to build a "Standalone" unified provider (e.g., using Redis Streams/
 3.  **Registration**: Register two separate provider classes in your `fabric.mod.json` (one for `openeconomy:storage` and one for `openeconomy:messaging`), but have them share the same underlying connection or service.
 4.  **Loop Prevention**: Always include a `serverId` in your stored data so that the watcher can ignore updates that originated from the local server.
 
+
+## License
+This addon is licensed under **CC0-1.0** (Public Domain). See the shared [LICENSE](../LICENSE) file for the full legal text. You are free to copy, modify, and distribute this code as a template for your own unified providers without any restrictions or attribution requirements.
+
+*Note: The OpenEconomy core project remains under the MIT license.*

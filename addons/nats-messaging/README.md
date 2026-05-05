@@ -73,3 +73,8 @@ If you want to build a messaging provider for a different service (e.g., Redis P
 3.  **Registration**: Add your provider class to your `fabric.mod.json` under the `openeconomy:messaging` entrypoint.
 4.  **Integration**: Ensure your implementation broadcasts JSON packets containing the current server ID to avoid infinite loops and uses the `AccountData` revision for consistency.
 
+
+## License
+This addon is licensed under **CC0-1.0** (Public Domain). See the shared [LICENSE](../LICENSE) file for the full legal text. You are free to copy, modify, and distribute this code as a template for your own messaging providers without any restrictions or attribution requirements.
+
+*Note: The OpenEconomy core project remains under the MIT license.*
