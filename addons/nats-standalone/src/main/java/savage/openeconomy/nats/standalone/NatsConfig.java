@@ -23,7 +23,6 @@ public class NatsConfig {
         return instance;
     }
 
-    @SuppressWarnings("unchecked")
     private void load() {
         try {
             if (!Files.exists(CONFIG_PATH)) {

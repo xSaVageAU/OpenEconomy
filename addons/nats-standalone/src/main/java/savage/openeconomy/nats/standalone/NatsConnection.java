@@ -5,7 +5,6 @@ import io.nats.client.Nats;
 import io.nats.client.Options;
 
 import java.io.IOException;
-import java.util.UUID;
 
 public class NatsConnection {
     public static final String SERVER_ID = NatsConfig.get().serverId;

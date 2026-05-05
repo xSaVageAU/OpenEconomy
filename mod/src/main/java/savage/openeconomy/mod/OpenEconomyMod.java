@@ -3,7 +3,6 @@ package savage.openeconomy.mod;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import savage.openeconomy.core.EconomyManager;
-import savage.openeconomy.integration.OpenEconomyProvider;
 import savage.openeconomy.mod.command.ModEconomyCommands;
 import savage.openeconomy.mod.config.ConfigManager;
 import savage.openeconomy.mod.config.EconomyConfig;

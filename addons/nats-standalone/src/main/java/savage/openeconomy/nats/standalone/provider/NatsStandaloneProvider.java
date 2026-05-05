@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import io.nats.client.Connection;
 import io.nats.client.KeyValue;
-import io.nats.client.api.KeyValueWatcher;
 import io.nats.client.api.KeyValueEntry;
 import io.nats.client.api.KeyValueConfiguration;
 import org.slf4j.Logger;
@@ -12,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import savage.openeconomy.api.AccountData;
 import savage.openeconomy.api.EconomyMessaging;
 import savage.openeconomy.api.EconomyStorage;
-import savage.openeconomy.api.EconomyMessaging.AccountUpdate;
 import savage.openeconomy.nats.standalone.NatsConfig;
 import savage.openeconomy.nats.standalone.NatsConnection;
 
