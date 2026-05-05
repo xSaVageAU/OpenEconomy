@@ -65,7 +65,7 @@ public class NatsStandaloneProvider implements EconomyStorage, EconomyMessaging 
     public CompletableFuture<Boolean> saveAccount(UUID uuid, AccountData data) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                byte[] value = serialize(data);
+                byte[] value = serialize(serverId, data);
                 String key = uuid.toString();
                 
                 KeyValueEntry existing = kv.get(key);
@@ -125,7 +125,13 @@ public class NatsStandaloneProvider implements EconomyStorage, EconomyMessaging 
     }
 
     @Override
-    public void publish(UUID uuid, AccountData data) {
+    public void publish(UUID sourceServerId, UUID uuid, AccountData data) {
+        try {
+            byte[] value = serialize(sourceServerId.toString(), data);
+            kv.put(uuid.toString(), value);
+        } catch (Exception e) {
+            LOGGER.error("Failed to publish update for {}: {}", uuid, e.getMessage());
+        }
     }
 
     @Override
@@ -138,11 +144,10 @@ public class NatsStandaloneProvider implements EconomyStorage, EconomyMessaging 
                     if (syncListener == null || entry.getValue() == null) return;
                     try {
                         AccountWire wire = GSON.fromJson(entry.getValueAsString(), AccountWire.class);
-                        if (serverId.equals(wire.serverId)) return;
-
+                        UUID sourceServerId = UUID.fromString(wire.serverId);
                         UUID uuid = UUID.fromString(entry.getKey());
                         AccountData data = new AccountData(wire.name, new BigDecimal(wire.balance), wire.revision);
-                        syncListener.accept(new AccountUpdate(uuid, data));
+                        syncListener.accept(new AccountUpdate(sourceServerId, uuid, data));
                     } catch (Exception ignored) {}
                 }
 
@@ -160,8 +165,8 @@ public class NatsStandaloneProvider implements EconomyStorage, EconomyMessaging 
         NatsConnection.close();
     }
 
-    private byte[] serialize(AccountData data) {
-        return GSON.toJson(new AccountWire(serverId, data.name(), data.balance().toPlainString(), data.revision()))
+    private byte[] serialize(String sourceId, AccountData data) {
+        return GSON.toJson(new AccountWire(sourceId, data.name(), data.balance().toPlainString(), data.revision()))
                 .getBytes(StandardCharsets.UTF_8);
     }
 

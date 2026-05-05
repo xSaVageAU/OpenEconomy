@@ -237,7 +237,7 @@ public class TransactionManager {
             }
         }
         
-        messaging.publish(uuid, newData);
+        messaging.publish(savage.openeconomy.OpenEconomy.getServerId(), uuid, newData);
     }
 
     public Lock getLock(UUID uuid) {

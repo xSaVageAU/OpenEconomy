@@ -79,7 +79,12 @@ public class EconomyManager {
         }).join();
 
         // 7. Subscribe to cross-server updates
-        messaging.subscribe(update -> updateCacheInternally(update.uuid(), update.data()));
+        messaging.subscribe(update -> {
+            if (update.sourceServerId().equals(OpenEconomy.getServerId())) {
+                return; // Ignore updates originated from this server
+            }
+            updateCacheInternally(update.uuid(), update.data());
+        });
     }
 
     private String formatBytes(long bytes) {
@@ -93,6 +98,12 @@ public class EconomyManager {
         lock.lock();
         try {
             AccountData oldData = cache.getIfPresent(uuid);
+            
+            // Revision check: only update if the new data is actually newer
+            if (oldData != null && oldData.revision() >= newData.revision()) {
+                return;
+            }
+
             cache.put(uuid, newData);
             
             // Notify player if balance changed (and they are online here)

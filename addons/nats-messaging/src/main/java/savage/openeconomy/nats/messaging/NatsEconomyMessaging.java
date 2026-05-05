@@ -35,10 +35,10 @@ public class NatsEconomyMessaging implements EconomyMessaging {
     }
 
     @Override
-    public void publish(UUID uuid, AccountData data) {
+    public void publish(UUID sourceServerId, UUID uuid, AccountData data) {
         try {
             MessageWire wire = new MessageWire(
-                    NatsConnection.SERVER_ID,
+                    sourceServerId.toString(),
                     uuid.toString(),
                     data.name(),
                     data.balance().toPlainString(),
@@ -60,11 +60,8 @@ public class NatsEconomyMessaging implements EconomyMessaging {
                         MessageWire.class
                 );
 
-                // Skip messages from this server
-                if (NatsConnection.SERVER_ID.equals(wire.serverId)) return;
-
                 AccountData data = new AccountData(wire.name, new BigDecimal(wire.balance), wire.revision);
-                listener.accept(new AccountUpdate(UUID.fromString(wire.uuid), data));
+                listener.accept(new AccountUpdate(UUID.fromString(wire.serverId), UUID.fromString(wire.uuid), data));
             } catch (Exception e) {
                 LOGGER.error("Failed to process incoming account update: {}", e.getMessage());
             }

@@ -13,10 +13,11 @@ public interface EconomyMessaging {
     /**
      * Publishes an account update to all listening servers.
      *
+     * @param sourceServerId The UUID of the server originating the update.
      * @param uuid The player's UUID.
      * @param data The updated account data.
      */
-    void publish(UUID uuid, AccountData data);
+    void publish(UUID sourceServerId, UUID uuid, AccountData data);
 
     /**
      * Registers a listener to be notified of account updates from external sources
@@ -31,5 +32,5 @@ public interface EconomyMessaging {
     /**
      * Represents a change to an account's data, received from an external source.
      */
-    record AccountUpdate(UUID uuid, AccountData data) {}
+    record AccountUpdate(UUID sourceServerId, UUID uuid, AccountData data) {}
 }

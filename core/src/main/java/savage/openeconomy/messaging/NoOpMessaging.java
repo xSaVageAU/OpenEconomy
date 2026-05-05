@@ -13,7 +13,7 @@ import java.util.function.Consumer;
 public class NoOpMessaging implements EconomyMessaging {
 
     @Override
-    public void publish(UUID uuid, AccountData data) {
+    public void publish(UUID sourceServerId, UUID uuid, AccountData data) {
         // No-op: single server, no need to broadcast
     }
 

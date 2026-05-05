@@ -15,14 +15,20 @@ public class OpenEconomy implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private static MinecraftServer server;
+    private static java.util.UUID serverId;
 
     public static MinecraftServer getServer() {
         return server;
     }
 
+    public static java.util.UUID getServerId() {
+        return serverId;
+    }
+
     @Override
     public void onInitialize() {
-        LOGGER.info("OpenEconomy Core Engine is initializing...");
+        serverId = java.util.UUID.randomUUID();
+        LOGGER.info("OpenEconomy Core Engine is initializing... (Server ID: {})", serverId);
 
         StorageRegistry.discoverProviders();
         MessagingRegistry.discoverProviders();
