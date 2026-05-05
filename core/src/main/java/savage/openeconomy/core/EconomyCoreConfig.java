@@ -26,6 +26,14 @@ public interface EconomyCoreConfig {
         return Integer.MAX_VALUE;
     }
 
+    default int getLeaderboardCacheSeconds() {
+        return 60;
+    }
+
+    default int getLeaderboardSize() {
+        return 10;
+    }
+
     /**
      * Whether the engine should automatically send balance update notifications (diff messages) to the player.
      */

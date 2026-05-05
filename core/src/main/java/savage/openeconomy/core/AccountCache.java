@@ -19,6 +19,9 @@ import java.util.concurrent.CompletableFuture;
 public class AccountCache {
     private final AsyncLoadingCache<UUID, AccountData> cache;
     private final Cache<String, UUID> nameToUuid;
+    
+    private volatile List<AccountData> topAccountsCache = List.of();
+    private long lastTopAccountsUpdate = 0;
 
     public AccountCache(EconomyStorage storage) {
         int maxSize = EconomyManager.getConfig().getCacheMaximumSize();
@@ -51,12 +54,6 @@ public class AccountCache {
         return cache.synchronous().estimatedSize();
     }
 
-    public long estimateMemorySize() {
-        return cache.synchronous().asMap().values().stream()
-                .mapToLong(AccountData::estimateSize)
-                .sum();
-    }
-
     public void put(UUID uuid, AccountData data) {
         cache.synchronous().put(uuid, data);
         nameToUuid.put(data.name().toLowerCase(), uuid);
@@ -87,10 +84,19 @@ public class AccountCache {
         return nameToUuid.asMap().keySet();
     }
 
-    public List<AccountData> getTopAccounts(int limit) {
-        return cache.synchronous().asMap().values().stream()
-                .sorted((a, b) -> b.balance().compareTo(a.balance()))
-                .limit(limit)
-                .toList();
+    public synchronized List<AccountData> getTopAccounts(int limit) {
+        long now = System.currentTimeMillis();
+        long cacheMillis = EconomyManager.getConfig().getLeaderboardCacheSeconds() * 1000L;
+        int maxTop = EconomyManager.getConfig().getLeaderboardSize();
+
+        if (now - lastTopAccountsUpdate > cacheMillis || topAccountsCache.isEmpty()) {
+            topAccountsCache = cache.synchronous().asMap().values().stream()
+                    .sorted((a, b) -> b.balance().compareTo(a.balance()))
+                    .limit(maxTop)
+                    .toList();
+            lastTopAccountsUpdate = now;
+        }
+        
+        return topAccountsCache.stream().limit(limit).toList();
     }
 }
