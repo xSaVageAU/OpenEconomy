@@ -21,15 +21,22 @@ public class AccountCache {
     private final Cache<String, UUID> nameToUuid;
 
     public AccountCache(EconomyStorage storage) {
-        this.cache = Caffeine.newBuilder()
-                .maximumSize(10000)
-                .expireAfterAccess(Duration.ofMinutes(30))
-                .buildAsync((uuid, executor) -> storage.loadAccount(uuid));
+        int maxSize = EconomyManager.getConfig().getCacheMaximumSize();
+        int evictionMinutes = EconomyManager.getConfig().getCacheEvictionMinutes();
 
-        this.nameToUuid = Caffeine.newBuilder()
-                .maximumSize(10000)
-                .expireAfterAccess(Duration.ofMinutes(60))
-                .build();
+        var mainBuilder = Caffeine.newBuilder()
+                .maximumSize(maxSize);
+        if (evictionMinutes > 0) {
+            mainBuilder.expireAfterAccess(Duration.ofMinutes(evictionMinutes));
+        }
+        this.cache = mainBuilder.buildAsync((uuid, executor) -> storage.loadAccount(uuid));
+
+        var nameBuilder = Caffeine.newBuilder()
+                .maximumSize(maxSize);
+        if (evictionMinutes > 0) {
+            nameBuilder.expireAfterAccess(Duration.ofMinutes(60)); // Keep names longer
+        }
+        this.nameToUuid = nameBuilder.build();
     }
 
     public CompletableFuture<AccountData> get(UUID uuid) {
@@ -38,6 +45,16 @@ public class AccountCache {
 
     public AccountData getIfPresent(UUID uuid) {
         return cache.synchronous().getIfPresent(uuid);
+    }
+
+    public long size() {
+        return cache.synchronous().estimatedSize();
+    }
+
+    public long estimateMemorySize() {
+        return cache.synchronous().asMap().values().stream()
+                .mapToLong(AccountData::estimateSize)
+                .sum();
     }
 
     public void put(UUID uuid, AccountData data) {

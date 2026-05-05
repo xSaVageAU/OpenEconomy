@@ -72,11 +72,20 @@ public class EconomyManager {
         // 6. Pre-load data (optional)
         storage.loadAllAccounts().thenAccept(accounts -> {
             cache.putAll(accounts);
-            OpenEconomy.LOGGER.info("Pre-loaded {} accounts into cache", accounts.size());
+            
+            long bytes = cache.estimateMemorySize();
+            String sizeStr = formatBytes(bytes);
+            OpenEconomy.LOGGER.info("OpenEconomy Core ready. Pre-loaded {} accounts into cache (Est. Memory: {}).", accounts.size(), sizeStr);
         }).join();
 
         // 7. Subscribe to cross-server updates
         messaging.subscribe(update -> updateCacheInternally(update.uuid(), update.data()));
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format("%.2f KB", bytes / 1024.0);
+        return String.format("%.2f MB", bytes / (1024.0 * 1024.0));
     }
 
     private void updateCacheInternally(UUID uuid, AccountData newData) {
@@ -107,6 +116,18 @@ public class EconomyManager {
      */
     public CompletableFuture<BigDecimal> getBalanceAsync(UUID uuid) {
         return cache.get(uuid).thenApply(data -> data != null ? data.balance() : getConfig().getDefaultBalance());
+    }
+
+    public long getCacheSize() {
+        return cache.size();
+    }
+
+    public long getCacheMemorySize() {
+        return cache.estimateMemorySize();
+    }
+
+    public String getFormattedCacheSize() {
+        return formatBytes(getCacheMemorySize());
     }
 
     public UUID getUUIDByName(String name) {

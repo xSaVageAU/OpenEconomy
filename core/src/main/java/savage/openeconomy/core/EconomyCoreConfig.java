@@ -15,6 +15,13 @@ public interface EconomyCoreConfig {
     int getEconomyScale();
     String getStorageType();
     String getMessagingType();
+    default int getCacheEvictionMinutes() {
+        return -1;
+    }
+
+    default int getCacheMaximumSize() {
+        return Integer.MAX_VALUE;
+    }
 
     /**
      * Whether the engine should automatically send balance update notifications (diff messages) to the player.

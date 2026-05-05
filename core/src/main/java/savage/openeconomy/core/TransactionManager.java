@@ -64,6 +64,10 @@ public class TransactionManager {
                     }
                     return storage.saveAccount(to, toState[1]).thenApply(s2 -> {
                         if (s2) {
+                            // Update cache with the NEW revisions for both accounts
+                            cache.put(from, new AccountData(fromState[1].name(), fromState[1].balance(), fromState[1].revision() + 1));
+                            cache.put(to, new AccountData(toState[1].name(), toState[1].balance(), toState[1].revision() + 1));
+                            
                             publishAndNotify(from, fromState[0], fromState[1]);
                             publishAndNotify(to, toState[0], toState[1]);
                             return true;
@@ -125,6 +129,8 @@ public class TransactionManager {
             
             return storage.saveAccount(uuid, updated).thenCompose(success -> {
                 if (success) {
+                    // Update cache with the NEW revision
+                    cache.put(uuid, new AccountData(updated.name(), updated.balance(), updated.revision() + 1));
                     publishAndNotify(uuid, current, updated);
                     return CompletableFuture.completedFuture(true);
                 } else {
