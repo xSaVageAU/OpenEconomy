@@ -1,0 +1,29 @@
+{
+	"schemaVersion": 1,
+	"id": "open-economy-nats-messaging",
+	"version": "${version}",
+	"name": "OpenEconomy NATS Messaging",
+	"description": "NATS Core pub/sub messaging provider for OpenEconomy.",
+	"authors": [
+		"Savage"
+	],
+	"contact": {
+		"sources": "https://github.com/xSaVageAU/OpenEconomy"
+	},
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"savage.openeconomy.nats.OpenEconomyNats"
+		],
+		"openeconomy:messaging": [
+			"savage.openeconomy.nats.messaging.NatsMessagingProvider"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.18.5",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"open-economy": "*"
+	}
+}

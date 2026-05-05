@@ -1,9 +1,9 @@
 {
 	"schemaVersion": 1,
-	"id": "open-economy-nats",
+	"id": "open-economy-nats-standalone",
 	"version": "${version}",
-	"name": "OpenEconomy NATS Provider",
-	"description": "NATS JetStream KV storage and pub/sub messaging provider for OpenEconomy.",
+	"name": "OpenEconomy NATS Standalone",
+	"description": "High-performance unified NATS storage & messaging for OpenEconomy using KV Watchers.",
 	"authors": [
 		"Savage"
 	],
@@ -14,13 +14,13 @@
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"savage.openeconomy.nats.OpenEconomyNats"
+			"savage.openeconomy.nats.standalone.OpenEconomyNatsStandalone"
 		],
 		"openeconomy:storage": [
-			"savage.openeconomy.nats.storage.NatsStorageProvider"
+			"savage.openeconomy.nats.standalone.NatsStandaloneStorageProvider"
 		],
 		"openeconomy:messaging": [
-			"savage.openeconomy.nats.messaging.NatsMessagingProvider"
+			"savage.openeconomy.nats.standalone.NatsStandaloneMessagingProvider"
 		]
 	},
 	"depends": {

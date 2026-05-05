@@ -1,58 +1,49 @@
-package savage.openeconomy.nats.storage;
-
-import savage.openeconomy.nats.NatsConnection;
-import savage.openeconomy.nats.NatsConfig;
+package savage.openeconomy.nats.standalone;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import io.nats.client.Connection;
 import io.nats.client.KeyValue;
+import io.nats.client.api.KeyValueWatcher;
 import io.nats.client.api.KeyValueEntry;
 import io.nats.client.api.KeyValueConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import savage.openeconomy.api.AccountData;
+import savage.openeconomy.api.EconomyMessaging;
 import savage.openeconomy.api.EconomyStorage;
+import savage.openeconomy.api.EconomyMessaging.AccountUpdate;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
-/**
- * Economy storage backed by NATS JetStream Key-Value.
- * Each account is stored as a KV entry keyed by UUID.
- */
-public class NatsEconomyStorage implements EconomyStorage {
-    private static final Logger LOGGER = LoggerFactory.getLogger("open-economy-nats");
+public class NatsStandaloneProvider implements EconomyStorage, EconomyMessaging {
+    private static final Logger LOGGER = LoggerFactory.getLogger("open-economy-nats-standalone");
     private static final Gson GSON = new GsonBuilder().create();
 
     private final KeyValue kv;
+    private final String serverId = NatsConnection.SERVER_ID;
+    private Consumer<AccountUpdate> syncListener;
 
-    public NatsEconomyStorage() {
+    public NatsStandaloneProvider() {
         Connection conn = NatsConnection.get();
         NatsConfig config = NatsConfig.get();
 
         try {
-            // Create the KV bucket if it doesn't exist
             try {
                 conn.keyValueManagement().create(
                         KeyValueConfiguration.builder()
                                 .name(config.kvBucket)
                                 .build()
                 );
-                LOGGER.info("Created KV bucket: {}", config.kvBucket);
-            } catch (Exception e) {
-                // Bucket already exists — expected on subsequent startups
-                LOGGER.debug("KV bucket '{}' already exists", config.kvBucket);
-            }
+            } catch (Exception ignored) {}
 
             this.kv = conn.keyValue(config.kvBucket);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to initialize NATS KV storage", e);
+            throw new RuntimeException("Failed to initialize NATS Standalone storage", e);
         }
     }
 
@@ -77,12 +68,10 @@ public class NatsEconomyStorage implements EconomyStorage {
                 byte[] value = serialize(data);
                 String key = uuid.toString();
                 
-                // Fetch existing to check revision (Optimistic Lock)
                 KeyValueEntry existing = kv.get(key);
                 if (existing != null) {
                     AccountData existingData = deserialize(existing.getValueAsString());
                     if (existingData.revision() >= data.revision()) {
-                        LOGGER.warn("Revision mismatch for {} (NATS): expected {}, found {}", uuid, data.revision(), existingData.revision());
                         return false;
                     }
                 }
@@ -103,7 +92,6 @@ public class NatsEconomyStorage implements EconomyStorage {
                 kv.delete(uuid.toString());
                 return true;
             } catch (Exception e) {
-                LOGGER.error("Failed to delete account {} from KV: {}", uuid, e.getMessage());
                 return false;
             }
         });
@@ -117,38 +105,63 @@ public class NatsEconomyStorage implements EconomyStorage {
                 List<String> keys;
                 try {
                     keys = kv.keys();
-                } catch (io.nats.client.JetStreamApiException e) {
-                    if (e.getErrorCode() == 404) return accounts; // Bucket empty
-                    throw e;
+                } catch (Exception e) {
+                    return accounts;
                 }
 
                 for (String key : keys) {
                     try {
-                        UUID uuid = UUID.fromString(key);
-                        AccountData data = loadAccount(uuid).join();
-                        if (data != null) {
-                            accounts.put(uuid, data);
+                        KeyValueEntry entry = kv.get(key);
+                        if (entry != null) {
+                            accounts.put(UUID.fromString(key), deserialize(entry.getValueAsString()));
                         }
-                    } catch (IllegalArgumentException e) {
-                        LOGGER.warn("Skipping invalid KV key: {}", key);
-                    }
+                    } catch (Exception ignored) {}
                 }
-                LOGGER.info("Loaded {} accounts from NATS KV", accounts.size());
             } catch (Exception e) {
-                LOGGER.error("Failed to load accounts from KV: {}", e.getMessage());
+                LOGGER.error("Failed to load all accounts: {}", e.getMessage());
             }
             return accounts;
         });
     }
 
     @Override
+    public void publish(UUID uuid, AccountData data) {
+    }
+
+    @Override
+    public void subscribe(Consumer<AccountUpdate> listener) {
+        this.syncListener = listener;
+        try {
+            kv.watchAll(new io.nats.client.api.KeyValueWatcher() {
+                @Override
+                public void watch(io.nats.client.api.KeyValueEntry entry) {
+                    if (syncListener == null || entry.getValue() == null) return;
+                    try {
+                        AccountWire wire = GSON.fromJson(entry.getValueAsString(), AccountWire.class);
+                        if (serverId.equals(wire.serverId)) return;
+
+                        UUID uuid = UUID.fromString(entry.getKey());
+                        AccountData data = new AccountData(wire.name, new BigDecimal(wire.balance), wire.revision);
+                        syncListener.accept(new AccountUpdate(uuid, data));
+                    } catch (Exception ignored) {}
+                }
+
+                @Override
+                public void endOfData() {
+                }
+            });
+        } catch (Exception e) {
+            LOGGER.error("Failed to start NATS KV watcher: {}", e.getMessage());
+        }
+    }
+
+    @Override
     public void shutdown() {
-        // Connection lifecycle managed by NatsConnection
-        LOGGER.info("NatsEconomyStorage shutdown.");
+        NatsConnection.close();
     }
 
     private byte[] serialize(AccountData data) {
-        return GSON.toJson(new AccountWire(data.name(), data.balance().toPlainString(), data.revision()))
+        return GSON.toJson(new AccountWire(serverId, data.name(), data.balance().toPlainString(), data.revision()))
                 .getBytes(StandardCharsets.UTF_8);
     }
 
@@ -157,8 +170,5 @@ public class NatsEconomyStorage implements EconomyStorage {
         return new AccountData(wire.name, new BigDecimal(wire.balance), wire.revision);
     }
 
-    /**
-     * Wire format for KV storage — avoids BigDecimal serialization quirks.
-     */
-    private record AccountWire(String name, String balance, long revision) {}
+    private record AccountWire(String serverId, String name, String balance, long revision) {}
 }

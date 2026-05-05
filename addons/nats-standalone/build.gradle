@@ -1,0 +1,21 @@
+/**
+ * OpenEconomy NATS Standalone Addon — High-performance unified storage & messaging via KV Watchers.
+ */
+base {
+	archivesName = "open-economy-nats-standalone"
+}
+
+loom {
+	mods {
+		"open-economy-nats-standalone" {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+dependencies {
+	compileOnly project(":core")
+	implementation "io.nats:jnats:2.25.2"
+	include "io.nats:jnats:2.25.2"
+	compileOnly "org.yaml:snakeyaml:2.2"
+}
