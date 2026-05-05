@@ -1,72 +1,53 @@
-# OpenEconomy NATS Addon
+# OpenEconomy NATS Messaging Addon
 
-The **NATS Addon** provides high-performance, distributed economy support for large Minecraft server clusters. It allows multiple servers to share a single global database while keeping their local caches synchronized in real-time.
+The **NATS Messaging Addon** provides lightweight, high-performance cache synchronization for OpenEconomy using NATS Core **Pub/Sub**.
+
+It is designed to keep local account caches across a server network synchronized in real-time. This is best used alongside a shared database (like MySQL) so that all servers stay in sync even after restarts.
 
 ## Key Features
 
-*   **Distributed Storage**: Uses NATS JetStream **Key-Value (KV)** as a high-speed, persistent global database.
 *   **Real-Time Sync**: Uses NATS Core **Pub/Sub** to broadcast balance changes to every server in the cluster instantly.
+*   **Decoupled Architecture**: Can be paired with any shared storage provider to add cross-server synchronization.
 *   **Self-Filtering**: Intelligent messaging logic prevents servers from processing their own broadcasted updates.
-*   **Auto-Provisioning**: Automatically creates the required KV buckets if they don't already exist.
+*   **Optimistic Revisions**: Includes the internal account revision in messages to ensure cross-server consistency.
 
 ## How it Works
 
-1.  **Storage**: When an account is loaded or saved, the engine communicates with the configured NATS KV bucket (default: `openeconomy-accounts`).
-2.  **Messaging**: When a balance changes on Server A, a message is published to the subject `openeconomy.accounts.<uuid>`.
-3.  **Synchronization**: Server B, Server C, etc., are subscribed to `openeconomy.accounts.>`. They receive the update and refresh their local memory cache immediately.
+1.  **Event**: A balance changes on Server A.
+2.  **Broadcast**: Server A publishes a JSON message to NATS on the subject `openeconomy.accounts.<uuid>`.
+3.  **Synchronization**: All other servers (subscribed to `openeconomy.accounts.>`) receive the message, update their local `AccountCache`, and notify online players if necessary.
 
-## Integration Example
+## Integration
 
-This addon implements both the `EconomyStorageProvider` and `EconomyMessagingProvider` interfaces.
-
-### Registration (`fabric.mod.json`)
-
-```json
-"entrypoints": {
-  "open-economy:storage": [
-    "savage.openeconomy.nats.storage.NatsStorageProvider"
-  ],
-  "open-economy:messaging": [
-    "savage.openeconomy.nats.messaging.NatsMessagingProvider"
-  ]
-}
-```
-
-## Messaging Reference
-
-This addon is the primary reference implementation for the `EconomyMessaging` interface.
-
-### Wire Format
-Updates are broadcasted as JSON-encoded packets. This format ensures that even if different servers have slightly different internal versions, they can still communicate using standard types.
+To use this addon, register it in your main OpenEconomy `config.json`:
 
 ```json
 {
-  "serverId": "UUID",
-  "uuid": "Player-UUID",
-  "name": "PlayerName",
-  "balance": "100.50"
+  "messagingType": "nats"
 }
 ```
 
-### Subject Wildcards
-NATS uses a hierarchical subject system. This addon uses:
-*   **Publishing**: `openeconomy.accounts.<uuid>`
-*   **Subscribing**: `openeconomy.accounts.>`
-
-Using the `>` (greater than) wildcard allows the server to maintain a single subscription that captures every account update without needing to subscribe to individual players.
-
-### Loopback Protection (Self-Filtering)
-To prevent infinite loops (where a server processes its own update, re-saves it, and re-broadcasts it), every message includes a `serverId`. 
-*   On startup, each server generates a unique `SERVER_ID`.
-*   If an incoming message's `serverId` matches the local one, it is silently discarded.
-
 ## Configuration
-
-The configuration is located at `config/open-economy/nats.yml`.
-
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `natsUrl` | `nats://localhost:4222` | The URL of your NATS server. |
-| `authToken` | `""` | Optional token for server authentication. |
-| `kvBucket` | `openeconomy-accounts` | The JetStream KV bucket for player data. |
+| `authToken` | `""` | Optional authentication token for the NATS server. |
 | `subject` | `openeconomy.accounts` | The base subject for broadcast messages. |
+
+The configuration is located at `config/open-economy/nats.yml`.
+
+*Note: `serverId` is generated automatically as a random UUID on every startup to prevent message loops.*
+
+## Wire Format
+
+Updates are broadcasted as JSON-encoded packets:
+
+```json
+{
+  "serverId": "550e8400-e29b-41d4-a716-446655440000",
+  "uuid": "78b40000-e29b-41d4-a716-446655440000",
+  "name": "PlayerName",
+  "balance": "100.50",
+  "revision": 42
+}
+```

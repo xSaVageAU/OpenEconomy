@@ -25,7 +25,6 @@ public class NatsConfig {
 
     public String natsUrl = "nats://localhost:4222";
     public String authToken = "";
-    public String kvBucket = "openeconomy-accounts";
     public String subject = "openeconomy.accounts";
 
     private static NatsConfig instance;

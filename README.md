@@ -10,7 +10,9 @@ The project is split into several modules to ensure a clean separation of concer
 *   **Mod Implementation**: The user-facing layer. Handles commands (`/bal`, `/pay`, `/eco`), configuration files, and player messaging.
 *   **[Addons](./addons/)**: Modular extensions that provide the actual "muscles" for storage and networking.
     *   **[JSON Storage](./addons/json/README.md)**: Standard, file-based persistence for local servers.
-    *   **[NATS Addon](./addons/nats/README.md)**: High-performance distributed storage and real-time cross-server synchronization.
+    *   **NATS Addons**: High-performance distributed solutions.
+        *   **[NATS Messaging](./addons/nats-messaging/README.md)**: Lightweight real-time cross-server synchronization.
+        *   **[NATS Standalone](./addons/nats-standalone/README.md)**: Unified high-speed storage and zero-latency syncing.
 
 ## Core Philosophy
 

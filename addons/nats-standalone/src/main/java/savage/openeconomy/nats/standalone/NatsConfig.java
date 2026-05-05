@@ -1,19 +1,20 @@
 package savage.openeconomy.nats.standalone;
 
+import net.fabricmc.loader.api.FabricLoader;
 import org.yaml.snakeyaml.Yaml;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Map;
 
 public class NatsConfig {
-    private static final Path CONFIG_PATH = Paths.get("config", "openeconomy", "nats-standalone.yml");
+    private static final Path CONFIG_PATH = FabricLoader.getInstance()
+            .getConfigDir().resolve("open-economy").resolve("nats-standalone.yml");
     private static NatsConfig instance;
 
-    public String url = "nats://localhost:4222";
+    public String natsUrl = "nats://localhost:4222";
+    public String authToken = "";
     public String kvBucket = "openeconomy_accounts";
-    public String serverId = "server-1";
 
     public static NatsConfig get() {
         if (instance == null) {
@@ -34,9 +35,9 @@ public class NatsConfig {
             try (InputStream in = Files.newInputStream(CONFIG_PATH)) {
                 Map<String, Object> data = yaml.load(in);
                 if (data != null) {
-                    this.url = (String) data.getOrDefault("url", url);
+                    this.natsUrl = (String) data.getOrDefault("natsUrl", natsUrl);
+                    this.authToken = (String) data.getOrDefault("authToken", authToken);
                     this.kvBucket = (String) data.getOrDefault("kvBucket", kvBucket);
-                    this.serverId = (String) data.getOrDefault("serverId", serverId);
                 }
             }
         } catch (Exception e) {
@@ -49,9 +50,9 @@ public class NatsConfig {
             Files.createDirectories(CONFIG_PATH.getParent());
             Yaml yaml = new Yaml();
             Map<String, Object> data = Map.of(
-                "url", url,
-                "kvBucket", kvBucket,
-                "serverId", serverId
+                "natsUrl", natsUrl,
+                "authToken", authToken,
+                "kvBucket", kvBucket
             );
             try (Writer writer = Files.newBufferedWriter(CONFIG_PATH)) {
                 yaml.dump(data, writer);
