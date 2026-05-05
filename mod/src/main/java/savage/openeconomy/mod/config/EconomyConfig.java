@@ -14,8 +14,10 @@ public class EconomyConfig implements EconomyCoreConfig {
     public int economyScale = 100;
     public boolean enableDiffMessages = true;
     public String notificationMode = "ACTION_BAR";
+    public String maxBalance = "1000000000000000"; // 1 Quadrillion
 
     private transient BigDecimal cachedDefaultBalance;
+    private transient BigDecimal cachedMaxBalance;
 
     @Override
     public NotificationMode getNotificationMode() {
@@ -41,6 +43,18 @@ public class EconomyConfig implements EconomyCoreConfig {
             }
         }
         return cachedDefaultBalance;
+    }
+
+    @Override
+    public BigDecimal getMaxBalance() {
+        if (cachedMaxBalance == null) {
+            try {
+                cachedMaxBalance = new BigDecimal(maxBalance);
+            } catch (NumberFormatException e) {
+                cachedMaxBalance = new BigDecimal("1000000000000000");
+            }
+        }
+        return cachedMaxBalance;
     }
 
     @Override public String getCurrencySymbol() { return currencySymbol; }

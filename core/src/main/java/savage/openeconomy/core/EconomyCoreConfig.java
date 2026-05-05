@@ -8,6 +8,9 @@ import java.math.BigDecimal;
  */
 public interface EconomyCoreConfig {
     BigDecimal getDefaultBalance();
+    default BigDecimal getMaxBalance() {
+        return new BigDecimal("1000000000000000"); // 1 Quadrillion
+    }
     String getCurrencySymbol();
     boolean isSymbolBeforeAmount();
     String getCurrencyName();

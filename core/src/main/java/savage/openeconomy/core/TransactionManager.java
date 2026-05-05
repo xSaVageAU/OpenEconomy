@@ -15,7 +15,6 @@ import java.util.concurrent.locks.Lock;
  * Handles all modifications to balances, ensuring thread safety and data integrity.
  */
 public class TransactionManager {
-    public static final BigDecimal MAX_BALANCE = new BigDecimal("1000000000000000"); // 1 Quadrillion
     
     private final AccountCache cache;
     private final EconomyStorage storage;
@@ -48,7 +47,7 @@ public class TransactionManager {
                     toState[0] = t;
 
                     fromState[1] = new AccountData(f.name(), f.balance().subtract(amount), f.revision() + 1);
-                    toState[1] = new AccountData(t.name(), t.balance().add(amount).min(MAX_BALANCE), t.revision() + 1);
+                    toState[1] = new AccountData(t.name(), t.balance().add(amount).min(EconomyManager.getConfig().getMaxBalance()), t.revision() + 1);
 
                     cache.put(from, fromState[1]);
                     cache.put(to, toState[1]);
@@ -85,7 +84,7 @@ public class TransactionManager {
 
     private CompletableFuture<Boolean> setBalance(UUID uuid, BigDecimal amount, int retry) {
         if (retry > 5) return CompletableFuture.completedFuture(false);
-        BigDecimal clamped = amount.max(BigDecimal.ZERO).min(MAX_BALANCE);
+        BigDecimal clamped = amount.max(BigDecimal.ZERO).min(EconomyManager.getConfig().getMaxBalance());
 
         return cache.get(uuid).thenCompose(current -> {
             if (current == null) return CompletableFuture.completedFuture(false);
@@ -118,7 +117,7 @@ public class TransactionManager {
         return cache.get(uuid).thenCompose(current -> {
             if (current == null) return CompletableFuture.completedFuture(false);
 
-            AccountData updated = new AccountData(current.name(), current.balance().add(amount).min(MAX_BALANCE), current.revision() + 1);
+            AccountData updated = new AccountData(current.name(), current.balance().add(amount).min(EconomyManager.getConfig().getMaxBalance()), current.revision() + 1);
             
             // Optimistic update
             cache.put(uuid, updated);
