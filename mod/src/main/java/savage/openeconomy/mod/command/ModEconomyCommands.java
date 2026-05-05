@@ -3,6 +3,7 @@ package savage.openeconomy.mod.command;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.server.permissions.Permissions;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -26,8 +27,10 @@ public class ModEconomyCommands {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         // Register /bal and /balance
-        dispatcher.register(Commands.literal("bal").executes(ModEconomyCommands::executeBalance));
-        dispatcher.register(Commands.literal("balance").executes(ModEconomyCommands::executeBalance));
+        dispatcher.register(Commands.literal("bal")
+                .executes(ModEconomyCommands::executeBalance));
+        dispatcher.register(Commands.literal("balance")
+                .executes(ModEconomyCommands::executeBalance));
 
         // Register the /pay command
         dispatcher.register(Commands.literal("pay")
@@ -38,6 +41,7 @@ public class ModEconomyCommands {
 
         // Register the /eco command (Admin commands)
         dispatcher.register(Commands.literal("eco")
+                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_MODERATOR))
                 .then(Commands.literal("give")
                         .then(Commands.argument("target", StringArgumentType.word())
                         .suggests(PLAYER_SUGGESTIONS)
@@ -59,7 +63,6 @@ public class ModEconomyCommands {
         var source = context.getSource();
         var player = source.getPlayerOrException();
         
-        // TODO: Check permissions (e.g. openeconomy.command.balance)
         
         var balance = EconomyManager.getInstance().getBalance(player.getUUID());
         source.sendSuccess(() -> Component.empty()
@@ -73,7 +76,6 @@ public class ModEconomyCommands {
         var source = context.getSource();
         var sender = source.getPlayerOrException();
         
-        // TODO: Check permissions (e.g. openeconomy.command.pay)
         
         String targetName = StringArgumentType.getString(context, "target");
         UUID targetUuid = resolveTarget(context);
@@ -103,7 +105,6 @@ public class ModEconomyCommands {
     private static int executeGive(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         var source = context.getSource();
         
-        // TODO: Check permissions (e.g. openeconomy.command.admin.give)
         
         String targetName = StringArgumentType.getString(context, "target");
         UUID targetUuid = resolveTarget(context);
@@ -122,7 +123,6 @@ public class ModEconomyCommands {
     private static int executeTake(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         var source = context.getSource();
         
-        // TODO: Check permissions (e.g. openeconomy.command.admin.take)
         
         String targetName = StringArgumentType.getString(context, "target");
         UUID targetUuid = resolveTarget(context);
@@ -141,7 +141,6 @@ public class ModEconomyCommands {
     private static int executeSet(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         var source = context.getSource();
         
-        // TODO: Check permissions (e.g. openeconomy.command.admin.set)
         
         String targetName = StringArgumentType.getString(context, "target");
         UUID targetUuid = resolveTarget(context);
