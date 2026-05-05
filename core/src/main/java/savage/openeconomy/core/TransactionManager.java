@@ -4,6 +4,7 @@ import com.google.common.util.concurrent.Striped;
 import savage.openeconomy.api.AccountData;
 import savage.openeconomy.api.EconomyMessaging;
 import savage.openeconomy.api.EconomyStorage;
+import savage.openeconomy.api.SaveStatus;
 import savage.openeconomy.util.EconomyMessages;
 
 import java.math.BigDecimal;
@@ -15,6 +16,7 @@ import java.util.concurrent.locks.Lock;
  * Handles all modifications to balances, ensuring thread safety and data integrity.
  */
 public class TransactionManager {
+    private static final int MAX_RETRIES = 5;
     
     private final AccountCache cache;
     private final EconomyStorage storage;
@@ -28,53 +30,69 @@ public class TransactionManager {
     }
 
     public CompletableFuture<Boolean> transfer(UUID from, UUID to, BigDecimal amount) {
+        return transfer(from, to, amount, 0);
+    }
+
+    private CompletableFuture<Boolean> transfer(UUID from, UUID to, BigDecimal amount, int retry) {
+        if (retry > MAX_RETRIES) return CompletableFuture.completedFuture(false);
         if (from.equals(to) || amount.compareTo(BigDecimal.ZERO) <= 0) 
             return CompletableFuture.completedFuture(false);
 
-        return cache.get(from).thenCombine(cache.get(to), (fromData, toData) -> {
-            if (fromData == null || toData == null) return CompletableFuture.completedFuture(false);
+        // 1. Ensure both accounts are in cache
+        return cache.get(from).thenCombine(cache.get(to), (fData, tData) -> {
+            if (fData == null || tData == null) return CompletableFuture.completedFuture(false);
 
-            AccountData[] fromState = new AccountData[2];
-            AccountData[] toState = new AccountData[2];
-            boolean[] success = {false};
+            final AccountData[] states = new AccountData[4]; // [oldFrom, newFrom, oldTo, newTo]
+            boolean[] canProceed = {false};
 
+            // 2. Lock and prepare the state change
             withLocks(from, to, () -> {
-                AccountData f = cache.getIfPresent(from);
-                AccountData t = cache.getIfPresent(to);
+                AccountData currentFrom = cache.getIfPresent(from);
+                AccountData currentTo = cache.getIfPresent(to);
 
-                if (f != null && t != null && f.balance().compareTo(amount) >= 0) {
-                    fromState[0] = f;
-                    toState[0] = t;
+                if (currentFrom != null && currentTo != null && currentFrom.balance().compareTo(amount) >= 0) {
+                    states[0] = currentFrom;
+                    states[2] = currentTo;
 
-                    fromState[1] = new AccountData(f.name(), f.balance().subtract(amount), f.revision() + 1);
-                    toState[1] = new AccountData(t.name(), t.balance().add(amount).min(EconomyManager.getConfig().getMaxBalance()), t.revision() + 1);
+                    states[1] = new AccountData(currentFrom.name(), currentFrom.balance().subtract(amount), currentFrom.revision() + 1);
+                    states[3] = new AccountData(currentTo.name(), currentTo.balance().add(amount).min(EconomyManager.getConfig().getMaxBalance()), currentTo.revision() + 1);
 
-                    cache.put(from, fromState[1]);
-                    cache.put(to, toState[1]);
-                    success[0] = true;
+                    // Optimistic cache update
+                    cache.put(from, states[1]);
+                    cache.put(to, states[3]);
+                    canProceed[0] = true;
                 }
             });
 
-            if (success[0]) {
-                return storage.saveAccount(from, fromState[1]).thenCompose(s1 -> {
-                    if (!s1.isSuccess()) {
-                        cache.invalidate(from);
+            if (!canProceed[0]) return CompletableFuture.completedFuture(false);
+
+            // 3. Persist to storage (Two-phase save)
+            return storage.saveAccount(from, states[1]).thenCompose(status1 -> {
+                if (status1 == SaveStatus.VERSION_COLLISION) {
+                    cache.invalidate(from);
+                    return transfer(from, to, amount, retry + 1);
+                }
+                if (status1 == SaveStatus.ERROR) {
+                    cache.invalidate(from);
+                    return CompletableFuture.completedFuture(false);
+                }
+
+                return storage.saveAccount(to, states[3]).thenCompose(status2 -> {
+                    if (status2 == SaveStatus.SUCCESS) {
+                        publishAndNotify(from, states[0], states[1]);
+                        publishAndNotify(to, states[2], states[3]);
+                        return CompletableFuture.completedFuture(true);
+                    } else {
+                        // If the second save fails, we are in a partially inconsistent state.
+                        // We invalidate to force a re-fetch from storage next time.
+                        cache.invalidate(to);
+                        if (status2 == SaveStatus.VERSION_COLLISION) {
+                             return transfer(from, to, amount, retry + 1);
+                        }
                         return CompletableFuture.completedFuture(false);
                     }
-                    return storage.saveAccount(to, toState[1]).thenApply(s2 -> {
-                        if (s2.isSuccess()) {
-                            publishAndNotify(from, fromState[0], fromState[1]);
-                            publishAndNotify(to, toState[0], toState[1]);
-                            return true;
-                        } else {
-                            cache.invalidate(to);
-                            return false;
-                        }
-                    });
                 });
-            }
-
-            return CompletableFuture.completedFuture(false);
+            });
         }).thenCompose(f -> f);
     }
 
@@ -83,25 +101,25 @@ public class TransactionManager {
     }
 
     private CompletableFuture<Boolean> setBalance(UUID uuid, BigDecimal amount, int retry) {
-        if (retry > 5) return CompletableFuture.completedFuture(false);
+        if (retry > MAX_RETRIES) return CompletableFuture.completedFuture(false);
         BigDecimal clamped = amount.max(BigDecimal.ZERO).min(EconomyManager.getConfig().getMaxBalance());
 
         return cache.get(uuid).thenCompose(current -> {
             if (current == null) return CompletableFuture.completedFuture(false);
 
             AccountData updated = new AccountData(current.name(), clamped, current.revision() + 1);
-            
-            // Optimistic update: update cache immediately so subsequent reads see the new balance
             cache.put(uuid, updated);
             
-            return storage.saveAccount(uuid, updated).thenCompose(success -> {
-                if (success.isSuccess()) {
+            return storage.saveAccount(uuid, updated).thenCompose(status -> {
+                if (status == SaveStatus.SUCCESS) {
                     publishAndNotify(uuid, current, updated);
                     return CompletableFuture.completedFuture(true);
-                } else {
-                    // Rollback cache on failure
+                } else if (status == SaveStatus.VERSION_COLLISION) {
                     cache.invalidate(uuid);
                     return setBalance(uuid, amount, retry + 1);
+                } else {
+                    cache.invalidate(uuid);
+                    return CompletableFuture.completedFuture(false);
                 }
             });
         });
@@ -112,24 +130,24 @@ public class TransactionManager {
     }
 
     private CompletableFuture<Boolean> addBalance(UUID uuid, BigDecimal amount, int retry) {
-        if (retry > 5 || amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
+        if (retry > MAX_RETRIES || amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
 
         return cache.get(uuid).thenCompose(current -> {
             if (current == null) return CompletableFuture.completedFuture(false);
 
             AccountData updated = new AccountData(current.name(), current.balance().add(amount).min(EconomyManager.getConfig().getMaxBalance()), current.revision() + 1);
-            
-            // Optimistic update
             cache.put(uuid, updated);
             
-            return storage.saveAccount(uuid, updated).thenCompose(success -> {
-                if (success.isSuccess()) {
+            return storage.saveAccount(uuid, updated).thenCompose(status -> {
+                if (status == SaveStatus.SUCCESS) {
                     publishAndNotify(uuid, current, updated);
                     return CompletableFuture.completedFuture(true);
-                } else {
-                    // Rollback cache on failure
+                } else if (status == SaveStatus.VERSION_COLLISION) {
                     cache.invalidate(uuid);
                     return addBalance(uuid, amount, retry + 1);
+                } else {
+                    cache.invalidate(uuid);
+                    return CompletableFuture.completedFuture(false);
                 }
             });
         });
@@ -140,67 +158,59 @@ public class TransactionManager {
     }
 
     private CompletableFuture<Boolean> removeBalance(UUID uuid, BigDecimal amount, int retry) {
-        if (retry > 5 || amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
+        if (retry > MAX_RETRIES || amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
 
         return cache.get(uuid).thenCompose(current -> {
-            if (current == null || current.balance().compareTo(amount) < 0) 
-                return CompletableFuture.completedFuture(false);
+            if (current == null) return CompletableFuture.completedFuture(false);
+            if (current.balance().compareTo(amount) < 0) return CompletableFuture.completedFuture(false);
 
             AccountData updated = new AccountData(current.name(), current.balance().subtract(amount), current.revision() + 1);
-            
-            // Optimistic update
             cache.put(uuid, updated);
             
-            return storage.saveAccount(uuid, updated).thenCompose(success -> {
-                if (success.isSuccess()) {
+            return storage.saveAccount(uuid, updated).thenCompose(status -> {
+                if (status == SaveStatus.SUCCESS) {
                     publishAndNotify(uuid, current, updated);
                     return CompletableFuture.completedFuture(true);
-                } else {
-                    // Rollback cache on failure
+                } else if (status == SaveStatus.VERSION_COLLISION) {
                     cache.invalidate(uuid);
                     return removeBalance(uuid, amount, retry + 1);
+                } else {
+                    cache.invalidate(uuid);
+                    return CompletableFuture.completedFuture(false);
                 }
             });
         });
     }
 
     public CompletableFuture<AccountData> updateNameOrGet(UUID uuid, String name) {
-        Lock lock = locks.get(uuid);
-        lock.lock();
-        try {
-            AccountData existing = cache.getIfPresent(uuid);
-            if (existing != null) {
-                if (name != null && !name.equalsIgnoreCase(existing.name())) {
-                    AccountData updated = new AccountData(name, existing.balance(), existing.revision());
-                    cache.invalidate(uuid); // Clear old name mapping
-                    cache.put(uuid, updated);
-                    return storage.saveAccount(uuid, updated).thenApply(v -> updated);
-                }
-                return CompletableFuture.completedFuture(existing);
-            }
-        } finally {
-            lock.unlock();
-        }
+        return updateNameOrGet(uuid, name, 0);
+    }
 
-        return cache.get(uuid).thenCompose(loaded -> {
-            AccountData result = loaded;
-            if (result == null) {
-                result = new AccountData(name, EconomyManager.getConfig().getDefaultBalance());
-            } else if (name != null && !name.equalsIgnoreCase(result.name())) {
-                result = new AccountData(name, result.balance(), result.revision());
+    private CompletableFuture<AccountData> updateNameOrGet(UUID uuid, String name, int retry) {
+        if (retry > MAX_RETRIES) return cache.get(uuid);
+
+        return cache.get(uuid).thenCompose(current -> {
+            AccountData target = current;
+            if (target == null) {
+                target = new AccountData(name, EconomyManager.getConfig().getDefaultBalance());
+            } else if (name != null && !name.equalsIgnoreCase(target.name())) {
+                target = new AccountData(name, target.balance(), target.revision() + 1);
+            } else {
+                return CompletableFuture.completedFuture(target);
             }
 
-            final AccountData finalResult = result;
-            return storage.saveAccount(uuid, finalResult).thenApply(success -> {
-                Lock l = locks.get(uuid);
-                l.lock();
-                try {
-                    cache.put(uuid, finalResult);
-                } finally {
-                    l.unlock();
+            final AccountData finalTarget = target;
+            return storage.saveAccount(uuid, finalTarget).thenCompose(status -> {
+                if (status == SaveStatus.SUCCESS) {
+                    cache.put(uuid, finalTarget);
+                    publishAndNotify(uuid, current, finalTarget);
+                    return CompletableFuture.completedFuture(finalTarget);
+                } else if (status == SaveStatus.VERSION_COLLISION) {
+                    cache.invalidate(uuid);
+                    return updateNameOrGet(uuid, name, retry + 1);
+                } else {
+                    return CompletableFuture.completedFuture(current != null ? current : finalTarget);
                 }
-                publishAndNotify(uuid, loaded, finalResult);
-                return finalResult;
             });
         });
     }
