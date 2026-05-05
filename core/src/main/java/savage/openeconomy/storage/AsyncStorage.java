@@ -112,13 +112,17 @@ public class AsyncStorage implements EconomyStorage {
 
     @Override
     public void shutdown() {
-        OpenEconomy.LOGGER.info("Flushing pending async economy operations...");
+        int pendingCount = pendingOperations.size();
+        if (pendingCount > 0) {
+            OpenEconomy.LOGGER.info("Flushing {} pending async economy operations...", pendingCount);
+        }
         try {
             CompletableFuture.allOf(pendingOperations.values().toArray(new CompletableFuture[0]))
-                    .orTimeout(10, TimeUnit.SECONDS)
-                    .join();
+                    .get(10, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            OpenEconomy.LOGGER.error("Shutdown timeout! {} economy operations were still pending and may have been lost. Increase storage performance or shutdown timeout if this happens often.", pendingOperations.size());
         } catch (Exception e) {
-            OpenEconomy.LOGGER.error("Timeout or error while flushing operations: {}", e.getMessage());
+            OpenEconomy.LOGGER.error("Error while flushing operations: {}", e.getMessage());
         }
         ioExecutor.shutdown();
         delegate.shutdown();
