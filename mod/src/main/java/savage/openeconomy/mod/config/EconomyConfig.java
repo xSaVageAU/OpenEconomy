@@ -11,7 +11,7 @@ public class EconomyConfig implements EconomyCoreConfig {
     public String currencyNamePlural = "Dollars";
     public String storageType = "json";
     public String messagingType = "none";
-    public String loggingType = "none";
+    public String loggingType = "json";
     public int economyScale = 100;
     public boolean enableDiffMessages = true;
     public String notificationMode = "ACTION_BAR";
