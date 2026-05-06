@@ -7,6 +7,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import savage.openeconomy.OpenEconomy;
 import savage.openeconomy.api.AccountData;
 import savage.openeconomy.api.EconomyStorage;
+import savage.openeconomy.api.SaveStatus;
 
 import java.io.IOException;
 import java.nio.file.*;
@@ -17,8 +18,7 @@ import java.util.stream.Stream;
 
 /**
  * Local JSON-based storage for OpenEconomy.
- * Stores each account in a separate file for better scalability and atomic
- * saves.
+ * Stores each account in a hashed subdirectory structure for filesystem efficiency.
  */
 public class JsonEconomyStorage implements EconomyStorage {
     private static final Gson GSON = new GsonBuilder().create();
@@ -33,12 +33,17 @@ public class JsonEconomyStorage implements EconomyStorage {
         }
     }
 
+    private Path getAccountPath(UUID uuid) {
+        String id = uuid.toString();
+        // Hashed subdirectories (e.g., accounts/a1/uuid.json)
+        return storageDir.resolve(id.substring(0, 2)).resolve(id + ".json");
+    }
+
     @Override
     public CompletableFuture<AccountData> loadAccount(UUID uuid) {
         return CompletableFuture.supplyAsync(() -> {
-            Path file = storageDir.resolve(uuid.toString() + ".json");
-            if (!Files.exists(file))
-                return null;
+            Path file = getAccountPath(uuid);
+            if (!Files.exists(file)) return null;
 
             try (var reader = Files.newBufferedReader(file)) {
                 return GSON.fromJson(reader, AccountData.class);
@@ -50,20 +55,21 @@ public class JsonEconomyStorage implements EconomyStorage {
     }
 
     @Override
-    public CompletableFuture<savage.openeconomy.api.SaveStatus> saveAccount(UUID uuid, AccountData data) {
+    public CompletableFuture<SaveStatus> saveAccount(UUID uuid, AccountData data) {
         return CompletableFuture.supplyAsync(() -> {
-            Path file = storageDir.resolve(uuid.toString() + ".json");
-            Path tempFile = storageDir.resolve(uuid.toString() + ".json.tmp");
+            Path file = getAccountPath(uuid);
+            Path tempFile = file.resolveSibling(uuid.toString() + ".json.tmp");
 
             try {
+                // Ensure sub-directory exists
+                Files.createDirectories(file.getParent());
+
                 // Optimistic Locking Check
                 if (Files.exists(file)) {
                     try (var reader = Files.newBufferedReader(file)) {
                         AccountData existing = GSON.fromJson(reader, AccountData.class);
                         if (existing != null && existing.revision() >= data.revision()) {
-                            OpenEconomy.LOGGER.warn("Revision mismatch for {}: expected {}, found {}", uuid,
-                                    data.revision(), existing.revision());
-                            return savage.openeconomy.api.SaveStatus.VERSION_COLLISION; // Collision!
+                            return SaveStatus.VERSION_COLLISION;
                         }
                     }
                 }
@@ -72,11 +78,19 @@ public class JsonEconomyStorage implements EconomyStorage {
                 try (var writer = Files.newBufferedWriter(tempFile)) {
                     GSON.toJson(data, writer);
                 }
-                Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-                return savage.openeconomy.api.SaveStatus.SUCCESS;
+                
+                try {
+                    Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(tempFile, file, StandardCopyOption.REPLACE_EXISTING);
+                }
+                
+                return SaveStatus.SUCCESS;
             } catch (IOException e) {
                 OpenEconomy.LOGGER.error("Failed to save account atomically for {}: {}", uuid, e.getMessage());
-                return savage.openeconomy.api.SaveStatus.ERROR;
+                // Cleanup temp file if it exists
+                try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
+                return SaveStatus.ERROR;
             }
         });
     }
@@ -85,7 +99,7 @@ public class JsonEconomyStorage implements EconomyStorage {
     public CompletableFuture<Boolean> deleteAccount(UUID uuid) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                Files.deleteIfExists(storageDir.resolve(uuid.toString() + ".json"));
+                Files.deleteIfExists(getAccountPath(uuid));
                 return true;
             } catch (IOException e) {
                 OpenEconomy.LOGGER.error("Failed to delete account {}: {}", uuid, e.getMessage());
@@ -98,17 +112,18 @@ public class JsonEconomyStorage implements EconomyStorage {
     public CompletableFuture<Map<UUID, AccountData>> loadAllAccounts() {
         return CompletableFuture.supplyAsync(() -> {
             Map<UUID, AccountData> accounts = new HashMap<>();
-            if (!Files.exists(storageDir))
-                return accounts;
+            if (!Files.exists(storageDir)) return accounts;
 
-            try (Stream<Path> files = Files.list(storageDir)) {
-                files.filter(f -> f.toString().endsWith(".json")).forEach(file -> {
+            // Use walk to recursively find all .json files in hashed subdirectories
+            try (Stream<Path> stream = Files.walk(storageDir, 2)) {
+                stream.filter(f -> f.toString().endsWith(".json")).forEach(file -> {
                     try (var reader = Files.newBufferedReader(file)) {
-                        String fileName = file.getFileName().toString();
-                        UUID uuid = UUID.fromString(fileName.substring(0, fileName.length() - 5));
                         AccountData data = GSON.fromJson(reader, AccountData.class);
-                        if (data != null)
+                        if (data != null) {
+                            String fileName = file.getFileName().toString();
+                            UUID uuid = UUID.fromString(fileName.substring(0, fileName.length() - 5));
                             accounts.put(uuid, data);
+                        }
                     } catch (Exception e) {
                         OpenEconomy.LOGGER.error("Failed to load account file {}: {}", file, e.getMessage());
                     }
@@ -122,6 +137,5 @@ public class JsonEconomyStorage implements EconomyStorage {
 
     @Override
     public void shutdown() {
-        OpenEconomy.LOGGER.info("JsonEconomyStorage shutdown.");
     }
 }
