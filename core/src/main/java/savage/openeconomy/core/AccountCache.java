@@ -18,7 +18,9 @@ import java.util.concurrent.CompletableFuture;
  */
 public class AccountCache {
     private final AsyncLoadingCache<UUID, AccountData> cache;
-    private final Cache<String, UUID> nameToUuid;
+    private final Cache<String, NameInfo> nameToIndex;
+    
+    private record NameInfo(UUID uuid, String name) {}
     
     private volatile List<AccountData> topAccountsCache = List.of();
     private final java.util.Set<UUID> topUuidCache = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -39,9 +41,9 @@ public class AccountCache {
         var nameBuilder = Caffeine.newBuilder()
                 .maximumSize(maxSize);
         if (evictionMinutes > 0) {
-            nameBuilder.expireAfterAccess(Duration.ofMinutes(60)); // Keep names longer
+            nameBuilder.expireAfterAccess(Duration.ofMinutes(evictionMinutes));
         }
-        this.nameToUuid = nameBuilder.build();
+        this.nameToIndex = nameBuilder.build();
     }
 
     public CompletableFuture<AccountData> get(UUID uuid) {
@@ -58,7 +60,7 @@ public class AccountCache {
 
     public void put(UUID uuid, AccountData data) {
         cache.synchronous().put(uuid, data);
-        nameToUuid.put(data.name().toLowerCase(), uuid);
+        nameToIndex.put(data.name().toLowerCase(), new NameInfo(uuid, data.name()));
 
         // Smart Invalidation: If they are already in the top or just broke into it, force a refresh
         if (topUuidCache.contains(uuid) || data.balance().compareTo(leaderboardCutoff) >= 0) {
@@ -68,27 +70,30 @@ public class AccountCache {
 
     public void putAll(Map<UUID, AccountData> accounts) {
         cache.synchronous().putAll(accounts);
-        accounts.forEach((uuid, data) -> nameToUuid.put(data.name().toLowerCase(), uuid));
+        accounts.forEach((uuid, data) -> nameToIndex.put(data.name().toLowerCase(), new NameInfo(uuid, data.name())));
     }
 
     public void invalidate(UUID uuid) {
         AccountData data = getIfPresent(uuid);
         if (data != null) {
-            nameToUuid.invalidate(data.name().toLowerCase());
+            nameToIndex.invalidate(data.name().toLowerCase());
         }
         cache.synchronous().invalidate(uuid);
     }
 
     public void invalidateName(String name) {
-        nameToUuid.invalidate(name.toLowerCase());
+        nameToIndex.invalidate(name.toLowerCase());
     }
 
     public UUID getUUIDByName(String name) {
-        return nameToUuid.getIfPresent(name.toLowerCase());
+        NameInfo info = nameToIndex.getIfPresent(name.toLowerCase());
+        return info != null ? info.uuid() : null;
     }
 
     public Collection<String> getAllNames() {
-        return nameToUuid.asMap().keySet();
+        return nameToIndex.asMap().values().stream()
+                .map(NameInfo::name)
+                .toList();
     }
 
     public synchronized List<AccountData> getTopAccounts(int limit) {
