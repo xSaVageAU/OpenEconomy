@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "open-economy-json-logger",
+  "version": "${version}",
+  "name": "OpenEconomy JSON Logger",
+  "description": "JSON Lines auditing provider for OpenEconomy.",
+  "authors": [
+    "savage"
+  ],
+  "contact": {
+    "homepage": "https://github.com/savage/OpenEconomy",
+    "sources": "https://github.com/savage/OpenEconomy"
+  },
+  "license": "CC0",
+  "icon": "assets/open-economy-json-logger/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "openeconomy:logging": [
+      "savage.openeconomy.jsonlogger.JsonLoggerProvider"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": ">=26.1",
+    "java": ">=25"
+  }
+}

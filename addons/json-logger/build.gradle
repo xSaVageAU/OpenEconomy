@@ -1,0 +1,19 @@
+/**
+ * OpenEconomy JSON Logger Addon — Auditing example.
+ */
+base {
+    archivesName = "open-economy-json-logger"
+}
+
+loom {
+    mods {
+        "open-economy-json-logger" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    compileOnly project(":core")
+    implementation "com.google.code.gson:gson:2.11.0" // We'll use GSON to format the JSON lines
+}

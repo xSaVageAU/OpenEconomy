@@ -89,7 +89,9 @@ public class TransactionManager {
                     if (status2 == SaveStatus.SUCCESS) {
                         publishAndNotify(from, states[0], states[1]);
                         publishAndNotify(to, states[2], states[3]);
-                        if (logger != null) logger.log(category, actor, to, amount, states[3].balance(), "Source: " + from);
+                        if (logger != null) {
+                            Thread.startVirtualThread(() -> logger.log(category, actor, to, amount, states[3].balance(), "Source: " + from));
+                        }
                         return CompletableFuture.completedFuture(true);
                     } else {
                         // If the second save fails, we are in a partially inconsistent state.
@@ -126,7 +128,9 @@ public class TransactionManager {
             return storage.saveAccount(uuid, updated).thenCompose(status -> {
                 if (status == SaveStatus.SUCCESS) {
                     publishAndNotify(uuid, current, updated);
-                    if (logger != null) logger.log(category, actor, uuid, amount, updated.balance(), null);
+                    if (logger != null) {
+                        Thread.startVirtualThread(() -> logger.log(category, actor, uuid, amount, updated.balance(), null));
+                    }
                     return CompletableFuture.completedFuture(true);
                 } else if (status == SaveStatus.VERSION_COLLISION) {
                     cache.invalidate(uuid);
@@ -159,7 +163,9 @@ public class TransactionManager {
             return storage.saveAccount(uuid, updated).thenCompose(status -> {
                 if (status == SaveStatus.SUCCESS) {
                     publishAndNotify(uuid, current, updated);
-                    if (logger != null) logger.log(category, actor, uuid, amount, updated.balance(), null);
+                    if (logger != null) {
+                        Thread.startVirtualThread(() -> logger.log(category, actor, uuid, amount, updated.balance(), null));
+                    }
                     return CompletableFuture.completedFuture(true);
                 } else if (status == SaveStatus.VERSION_COLLISION) {
                     cache.invalidate(uuid);
@@ -193,7 +199,9 @@ public class TransactionManager {
             return storage.saveAccount(uuid, updated).thenCompose(status -> {
                 if (status == SaveStatus.SUCCESS) {
                     publishAndNotify(uuid, current, updated);
-                    if (logger != null) logger.log(category, actor, uuid, amount.negate(), updated.balance(), null);
+                    if (logger != null) {
+                        Thread.startVirtualThread(() -> logger.log(category, actor, uuid, amount.negate(), updated.balance(), null));
+                    }
                     return CompletableFuture.completedFuture(true);
                 } else if (status == SaveStatus.VERSION_COLLISION) {
                     cache.invalidate(uuid);
