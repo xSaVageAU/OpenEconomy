@@ -12,6 +12,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.commands.SharedSuggestionProvider;
+import savage.openeconomy.api.TransactionContext;
 import savage.openeconomy.core.EconomyManager;
 import savage.openeconomy.util.CurrencyFormatter;
 import savage.openeconomy.mod.util.ModMessages;
@@ -114,7 +115,7 @@ public class ModEconomyCommands {
             throw new SimpleCommandExceptionType(Component.literal("You cannot pay yourself!")).create();
         }
 
-        EconomyManager.getInstance().transfer(sender.getUUID(), sender.getUUID(), targetUuid, amount, "pay").thenAccept(success -> {
+        EconomyManager.getInstance().transfer(TransactionContext.of("pay", sender.getUUID()), sender.getUUID(), targetUuid, amount).thenAccept(success -> {
             if (success) {
                 source.sendSuccess(() -> ModMessages.paySent(targetName, amount), false);
                 
@@ -139,7 +140,7 @@ public class ModEconomyCommands {
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
 
-        EconomyManager.getInstance().addBalance(source.getPlayerOrException().getUUID(), targetUuid, amount, "admin_give").thenAccept(success -> {
+        EconomyManager.getInstance().addBalance(TransactionContext.of("admin_give", source.getPlayerOrException().getUUID()), targetUuid, amount).thenAccept(success -> {
             if (success) {
                 source.sendSuccess(() -> ModMessages.giveSuccess(targetName, amount), true);
             } else {
@@ -157,7 +158,7 @@ public class ModEconomyCommands {
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
 
-        EconomyManager.getInstance().removeBalance(source.getPlayerOrException().getUUID(), targetUuid, amount, "admin_take").thenAccept(success -> {
+        EconomyManager.getInstance().removeBalance(TransactionContext.of("admin_take", source.getPlayerOrException().getUUID()), targetUuid, amount).thenAccept(success -> {
             if (success) {
                 source.sendSuccess(() -> ModMessages.takeSuccess(targetName, amount), true);
             } else {
@@ -175,7 +176,7 @@ public class ModEconomyCommands {
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
 
-        EconomyManager.getInstance().setBalance(source.getPlayerOrException().getUUID(), targetUuid, amount, "admin_set").thenAccept(success -> {
+        EconomyManager.getInstance().setBalance(TransactionContext.of("admin_set", source.getPlayerOrException().getUUID()), targetUuid, amount).thenAccept(success -> {
             if (success) {
                 source.sendSuccess(() -> ModMessages.setSuccess(targetName, amount), true);
             } else {

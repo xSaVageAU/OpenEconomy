@@ -10,6 +10,7 @@ import savage.openeconomy.storage.AsyncStorage;
 import savage.openeconomy.messaging.MessagingRegistry;
 import savage.openeconomy.storage.StorageRegistry;
 import savage.openeconomy.logging.LoggerRegistry;
+import savage.openeconomy.api.TransactionContext;
 import savage.openeconomy.api.TransactionLogger;
 
 import java.math.BigDecimal;
@@ -165,32 +166,32 @@ public class EconomyManager {
         return readyFuture.thenCompose(v -> transactions.transfer(from, to, amount));
     }
 
-    public CompletableFuture<Boolean> transfer(UUID actor, UUID from, UUID to, BigDecimal amount, String category) {
-        return readyFuture.thenCompose(v -> transactions.transfer(actor, from, to, amount, category));
+    public CompletableFuture<Boolean> transfer(TransactionContext context, UUID from, UUID to, BigDecimal amount) {
+        return readyFuture.thenCompose(v -> transactions.transfer(context, from, to, amount));
     }
 
     public CompletableFuture<Boolean> setBalance(UUID uuid, BigDecimal amount) {
         return readyFuture.thenCompose(v -> transactions.setBalance(uuid, amount));
     }
 
-    public CompletableFuture<Boolean> setBalance(UUID actor, UUID uuid, BigDecimal amount, String category) {
-        return readyFuture.thenCompose(v -> transactions.setBalance(actor, uuid, amount, category));
+    public CompletableFuture<Boolean> setBalance(TransactionContext context, UUID uuid, BigDecimal amount) {
+        return readyFuture.thenCompose(v -> transactions.setBalance(context, uuid, amount));
     }
 
     public CompletableFuture<Boolean> addBalance(UUID uuid, BigDecimal amount) {
         return readyFuture.thenCompose(v -> transactions.addBalance(uuid, amount));
     }
 
-    public CompletableFuture<Boolean> addBalance(UUID actor, UUID uuid, BigDecimal amount, String category) {
-        return readyFuture.thenCompose(v -> transactions.addBalance(actor, uuid, amount, category));
+    public CompletableFuture<Boolean> addBalance(TransactionContext context, UUID uuid, BigDecimal amount) {
+        return readyFuture.thenCompose(v -> transactions.addBalance(context, uuid, amount));
     }
 
     public CompletableFuture<Boolean> removeBalance(UUID uuid, BigDecimal amount) {
         return readyFuture.thenCompose(v -> transactions.removeBalance(uuid, amount));
     }
 
-    public CompletableFuture<Boolean> removeBalance(UUID actor, UUID uuid, BigDecimal amount, String category) {
-        return readyFuture.thenCompose(v -> transactions.removeBalance(actor, uuid, amount, category));
+    public CompletableFuture<Boolean> removeBalance(TransactionContext context, UUID uuid, BigDecimal amount) {
+        return readyFuture.thenCompose(v -> transactions.removeBalance(context, uuid, amount));
     }
 
     public CompletableFuture<AccountData> getOrCreateAccount(UUID uuid, String name) {

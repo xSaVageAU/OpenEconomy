@@ -11,6 +11,7 @@ public class EconomyConfig implements EconomyCoreConfig {
     public String currencyNamePlural = "Dollars";
     public String storageType = "json";
     public String messagingType = "none";
+    public String loggingType = "none";
     public int economyScale = 100;
     public boolean enableDiffMessages = true;
     public String notificationMode = "ACTION_BAR";
@@ -64,4 +65,5 @@ public class EconomyConfig implements EconomyCoreConfig {
     @Override public int getEconomyScale() { return economyScale; }
     @Override public String getStorageType() { return storageType; }
     @Override public String getMessagingType() { return messagingType; }
+    @Override public String getLoggingType() { return loggingType; }
 }
