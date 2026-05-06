@@ -92,7 +92,8 @@ public class TransactionManager {
                         if (logger != null) {
                             String cat = context != null ? context.category() : null;
                             UUID actor = context != null ? context.actor() : null;
-                            Thread.startVirtualThread(() -> logger.log(cat, actor, to, amount, states[3].balance(), "Source: " + from));
+                            BigDecimal diff = states[3].balance().subtract(states[2].balance());
+                            Thread.startVirtualThread(() -> logger.log(cat, actor, to, diff, states[3].balance(), "Source: " + from));
                         }
                         return CompletableFuture.completedFuture(true);
                     } else {
@@ -131,7 +132,10 @@ public class TransactionManager {
                 if (status == SaveStatus.SUCCESS) {
                     publishAndNotify(uuid, current, updated);
                     if (logger != null) {
-                        Thread.startVirtualThread(() -> logger.log(context.category(), context.actor(), uuid, amount, updated.balance(), null));
+                        String cat = context != null ? context.category() : null;
+                        UUID actor = context != null ? context.actor() : null;
+                        BigDecimal diff = updated.balance().subtract(current.balance());
+                        Thread.startVirtualThread(() -> logger.log(cat, actor, uuid, diff, updated.balance(), null));
                     }
                     return CompletableFuture.completedFuture(true);
                 } else if (status == SaveStatus.VERSION_COLLISION) {
@@ -168,7 +172,8 @@ public class TransactionManager {
                     if (logger != null) {
                         String cat = context != null ? context.category() : null;
                         UUID actor = context != null ? context.actor() : null;
-                        Thread.startVirtualThread(() -> logger.log(cat, actor, uuid, amount, updated.balance(), null));
+                        BigDecimal diff = updated.balance().subtract(current.balance());
+                        Thread.startVirtualThread(() -> logger.log(cat, actor, uuid, diff, updated.balance(), null));
                     }
                     return CompletableFuture.completedFuture(true);
                 } else if (status == SaveStatus.VERSION_COLLISION) {
@@ -206,7 +211,8 @@ public class TransactionManager {
                     if (logger != null) {
                         String cat = context != null ? context.category() : null;
                         UUID actor = context != null ? context.actor() : null;
-                        Thread.startVirtualThread(() -> logger.log(cat, actor, uuid, amount.negate(), updated.balance(), null));
+                        BigDecimal diff = updated.balance().subtract(current.balance());
+                        Thread.startVirtualThread(() -> logger.log(cat, actor, uuid, diff, updated.balance(), null));
                     }
                     return CompletableFuture.completedFuture(true);
                 } else if (status == SaveStatus.VERSION_COLLISION) {
