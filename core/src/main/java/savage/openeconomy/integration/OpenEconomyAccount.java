@@ -7,6 +7,7 @@ import eu.pb4.common.economy.api.EconomyProvider;
 import eu.pb4.common.economy.api.EconomyTransaction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import savage.openeconomy.api.TransactionContext;
 import savage.openeconomy.core.EconomyManager;
 
 import java.math.BigDecimal;
@@ -64,7 +65,7 @@ public class OpenEconomyAccount implements EconomyAccount {
     @Override
     public void setBalance(BigInteger value) {
         BigDecimal dollars = new BigDecimal(value).divide(new BigDecimal(EconomyManager.getConfig().getEconomyScale()), 2, RoundingMode.HALF_UP);
-        EconomyManager.getInstance().setBalance(profile.id(), dollars);
+        EconomyManager.getInstance().setBalance(TransactionContext.system("api"), profile.id(), dollars);
     }
 
     @Override
