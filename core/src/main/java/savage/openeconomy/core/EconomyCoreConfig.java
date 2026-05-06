@@ -22,6 +22,10 @@ public interface EconomyCoreConfig {
         return -1;
     }
 
+    default String getLoggingType() {
+        return "none";
+    }
+
     default int getCacheMaximumSize() {
         return Integer.MAX_VALUE;
     }

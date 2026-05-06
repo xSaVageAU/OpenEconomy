@@ -114,7 +114,7 @@ public class ModEconomyCommands {
             throw new SimpleCommandExceptionType(Component.literal("You cannot pay yourself!")).create();
         }
 
-        EconomyManager.getInstance().transfer(sender.getUUID(), targetUuid, amount).thenAccept(success -> {
+        EconomyManager.getInstance().transfer(sender.getUUID(), sender.getUUID(), targetUuid, amount, "pay").thenAccept(success -> {
             if (success) {
                 source.sendSuccess(() -> ModMessages.paySent(targetName, amount), false);
                 
@@ -139,7 +139,7 @@ public class ModEconomyCommands {
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
 
-        EconomyManager.getInstance().addBalance(targetUuid, amount).thenAccept(success -> {
+        EconomyManager.getInstance().addBalance(source.getPlayerOrException().getUUID(), targetUuid, amount, "admin_give").thenAccept(success -> {
             if (success) {
                 source.sendSuccess(() -> ModMessages.giveSuccess(targetName, amount), true);
             } else {
@@ -157,7 +157,7 @@ public class ModEconomyCommands {
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
 
-        EconomyManager.getInstance().removeBalance(targetUuid, amount).thenAccept(success -> {
+        EconomyManager.getInstance().removeBalance(source.getPlayerOrException().getUUID(), targetUuid, amount, "admin_take").thenAccept(success -> {
             if (success) {
                 source.sendSuccess(() -> ModMessages.takeSuccess(targetName, amount), true);
             } else {
@@ -175,7 +175,7 @@ public class ModEconomyCommands {
         UUID targetUuid = resolveTarget(context);
         BigDecimal amount = resolveAmount(context);
 
-        EconomyManager.getInstance().setBalance(targetUuid, amount).thenAccept(success -> {
+        EconomyManager.getInstance().setBalance(source.getPlayerOrException().getUUID(), targetUuid, amount, "admin_set").thenAccept(success -> {
             if (success) {
                 source.sendSuccess(() -> ModMessages.setSuccess(targetName, amount), true);
             } else {

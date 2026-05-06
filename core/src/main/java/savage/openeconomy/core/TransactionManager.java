@@ -11,6 +11,8 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.Lock;
+import savage.openeconomy.api.TransactionLogger;
 
 /**
  * Handles all modifications to balances, ensuring thread safety and data integrity.
@@ -21,19 +23,25 @@ public class TransactionManager {
     private final AccountCache cache;
     private final EconomyStorage storage;
     private final EconomyMessaging messaging;
+    private final TransactionLogger logger;
     private final Striped<Lock> locks = Striped.lazyWeakLock(2048);
 
-    public TransactionManager(AccountCache cache, EconomyStorage storage, EconomyMessaging messaging) {
+    public TransactionManager(AccountCache cache, EconomyStorage storage, EconomyMessaging messaging, TransactionLogger logger) {
         this.cache = cache;
         this.storage = storage;
         this.messaging = messaging;
+        this.logger = logger;
     }
 
     public CompletableFuture<Boolean> transfer(UUID from, UUID to, BigDecimal amount) {
-        return transfer(from, to, amount, 0);
+        return transfer(null, from, to, amount, "pay", 0);
     }
 
-    private CompletableFuture<Boolean> transfer(UUID from, UUID to, BigDecimal amount, int retry) {
+    public CompletableFuture<Boolean> transfer(UUID actor, UUID from, UUID to, BigDecimal amount, String category) {
+        return transfer(actor, from, to, amount, category, 0);
+    }
+
+    private CompletableFuture<Boolean> transfer(UUID actor, UUID from, UUID to, BigDecimal amount, String category, int retry) {
         if (retry > MAX_RETRIES) return CompletableFuture.completedFuture(false);
         if (from.equals(to) || amount.compareTo(BigDecimal.ZERO) <= 0) 
             return CompletableFuture.completedFuture(false);
@@ -70,7 +78,7 @@ public class TransactionManager {
             return storage.saveAccount(from, states[1]).thenCompose(status1 -> {
                 if (status1 == SaveStatus.VERSION_COLLISION) {
                     cache.invalidate(from);
-                    return transfer(from, to, amount, retry + 1);
+                    return transfer(actor, from, to, amount, category, retry + 1);
                 }
                 if (status1 == SaveStatus.ERROR) {
                     cache.invalidate(from);
@@ -81,13 +89,14 @@ public class TransactionManager {
                     if (status2 == SaveStatus.SUCCESS) {
                         publishAndNotify(from, states[0], states[1]);
                         publishAndNotify(to, states[2], states[3]);
+                        if (logger != null) logger.log(category, actor, to, amount, states[3].balance(), "Source: " + from);
                         return CompletableFuture.completedFuture(true);
                     } else {
                         // If the second save fails, we are in a partially inconsistent state.
                         // We invalidate to force a re-fetch from storage next time.
                         cache.invalidate(to);
                         if (status2 == SaveStatus.VERSION_COLLISION) {
-                             return transfer(from, to, amount, retry + 1);
+                             return transfer(actor, from, to, amount, category, retry + 1);
                         }
                         return CompletableFuture.completedFuture(false);
                     }
@@ -97,10 +106,14 @@ public class TransactionManager {
     }
 
     public CompletableFuture<Boolean> setBalance(UUID uuid, BigDecimal amount) {
-        return setBalance(uuid, amount, 0);
+        return setBalance(null, uuid, amount, "admin_set", 0);
     }
 
-    private CompletableFuture<Boolean> setBalance(UUID uuid, BigDecimal amount, int retry) {
+    public CompletableFuture<Boolean> setBalance(UUID actor, UUID uuid, BigDecimal amount, String category) {
+        return setBalance(actor, uuid, amount, category, 0);
+    }
+
+    private CompletableFuture<Boolean> setBalance(UUID actor, UUID uuid, BigDecimal amount, String category, int retry) {
         if (retry > MAX_RETRIES) return CompletableFuture.completedFuture(false);
         BigDecimal clamped = amount.max(BigDecimal.ZERO).min(EconomyManager.getConfig().getMaxBalance());
 
@@ -113,10 +126,11 @@ public class TransactionManager {
             return storage.saveAccount(uuid, updated).thenCompose(status -> {
                 if (status == SaveStatus.SUCCESS) {
                     publishAndNotify(uuid, current, updated);
+                    if (logger != null) logger.log(category, actor, uuid, amount, updated.balance(), null);
                     return CompletableFuture.completedFuture(true);
                 } else if (status == SaveStatus.VERSION_COLLISION) {
                     cache.invalidate(uuid);
-                    return setBalance(uuid, amount, retry + 1);
+                    return setBalance(actor, uuid, amount, category, retry + 1);
                 } else {
                     cache.invalidate(uuid);
                     return CompletableFuture.completedFuture(false);
@@ -126,10 +140,14 @@ public class TransactionManager {
     }
 
     public CompletableFuture<Boolean> addBalance(UUID uuid, BigDecimal amount) {
-        return addBalance(uuid, amount, 0);
+        return addBalance(null, uuid, amount, "admin_give", 0);
     }
 
-    private CompletableFuture<Boolean> addBalance(UUID uuid, BigDecimal amount, int retry) {
+    public CompletableFuture<Boolean> addBalance(UUID actor, UUID uuid, BigDecimal amount, String category) {
+        return addBalance(actor, uuid, amount, category, 0);
+    }
+
+    private CompletableFuture<Boolean> addBalance(UUID actor, UUID uuid, BigDecimal amount, String category, int retry) {
         if (retry > MAX_RETRIES || amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
 
         return cache.get(uuid).thenCompose(current -> {
@@ -141,10 +159,11 @@ public class TransactionManager {
             return storage.saveAccount(uuid, updated).thenCompose(status -> {
                 if (status == SaveStatus.SUCCESS) {
                     publishAndNotify(uuid, current, updated);
+                    if (logger != null) logger.log(category, actor, uuid, amount, updated.balance(), null);
                     return CompletableFuture.completedFuture(true);
                 } else if (status == SaveStatus.VERSION_COLLISION) {
                     cache.invalidate(uuid);
-                    return addBalance(uuid, amount, retry + 1);
+                    return addBalance(actor, uuid, amount, category, retry + 1);
                 } else {
                     cache.invalidate(uuid);
                     return CompletableFuture.completedFuture(false);
@@ -154,10 +173,14 @@ public class TransactionManager {
     }
 
     public CompletableFuture<Boolean> removeBalance(UUID uuid, BigDecimal amount) {
-        return removeBalance(uuid, amount, 0);
+        return removeBalance(null, uuid, amount, "admin_take", 0);
     }
 
-    private CompletableFuture<Boolean> removeBalance(UUID uuid, BigDecimal amount, int retry) {
+    public CompletableFuture<Boolean> removeBalance(UUID actor, UUID uuid, BigDecimal amount, String category) {
+        return removeBalance(actor, uuid, amount, category, 0);
+    }
+
+    private CompletableFuture<Boolean> removeBalance(UUID actor, UUID uuid, BigDecimal amount, String category, int retry) {
         if (retry > MAX_RETRIES || amount.compareTo(BigDecimal.ZERO) < 0) return CompletableFuture.completedFuture(false);
 
         return cache.get(uuid).thenCompose(current -> {
@@ -170,10 +193,11 @@ public class TransactionManager {
             return storage.saveAccount(uuid, updated).thenCompose(status -> {
                 if (status == SaveStatus.SUCCESS) {
                     publishAndNotify(uuid, current, updated);
+                    if (logger != null) logger.log(category, actor, uuid, amount.negate(), updated.balance(), null);
                     return CompletableFuture.completedFuture(true);
                 } else if (status == SaveStatus.VERSION_COLLISION) {
                     cache.invalidate(uuid);
-                    return removeBalance(uuid, amount, retry + 1);
+                    return removeBalance(actor, uuid, amount, category, retry + 1);
                 } else {
                     cache.invalidate(uuid);
                     return CompletableFuture.completedFuture(false);

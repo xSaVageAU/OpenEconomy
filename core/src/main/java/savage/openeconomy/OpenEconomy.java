@@ -32,6 +32,7 @@ public class OpenEconomy implements ModInitializer {
 
         StorageRegistry.discoverProviders();
         MessagingRegistry.discoverProviders();
+        savage.openeconomy.logging.LoggerRegistry.discoverProviders();
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, srv) -> 
             EconomyManager.getInstance().getOrCreateAccount(handler.getPlayer().getUUID(), handler.getPlayer().getGameProfile().name()));
